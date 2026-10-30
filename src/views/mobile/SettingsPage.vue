@@ -5,6 +5,7 @@
         <f7-block-title class="margin-top">{{ currentNickName }}</f7-block-title>
         <f7-list strong inset dividers>
             <f7-list-item :title="tt('User Profile')" link="/user/profile"></f7-list-item>
+            <f7-list-item title="Бюджеты и прогноз" link="/planning"></f7-list-item>
             <f7-list-item :title="tt('Transaction Categories')" link="/category/all"></f7-list-item>
             <f7-list-item :title="tt('Transaction Tags')" link="/tag/list"></f7-list-item>
             <f7-list-item :title="tt('Transaction Templates')" link="/template/list"></f7-list-item>

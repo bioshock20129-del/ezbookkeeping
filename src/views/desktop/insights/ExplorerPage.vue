@@ -1,6 +1,7 @@
 <template>
     <main-page-layout>
         <template #nav-items>
+            <router-link to="/planning" class="d-block ma-3">Бюджеты и прогноз</router-link>
             <div class="mb-2">
                 <btn-vertical-group :disabled="loading || updating || isCustomChartAIGenerating || isCurrentDataTableEditable" :buttons="allTabs" v-model="activeTab" />
             </div>
@@ -29,7 +30,7 @@
 
         <template #content>
             <v-card min-height="800">
-                <template #title>
+                <template #title v-if="activeTab !== 'forecast'">
                     <div class="title-and-toolbar d-flex align-center">
                         <span>{{ tt('Insights Explorer') }}</span>
                         <v-btn-group class="ms-4" color="default" density="comfortable" variant="outlined" divided>
@@ -193,6 +194,10 @@
                                             :loading="loading" :disabled="loading || updating"
                                             @click:transaction="onShowTransaction" />
                     </v-window-item>
+                    <v-window-item value="forecast">
+                        <p class="ma-4">Прогноз использует бюджеты и планы по счетам, независимо от фильтров исторических выборок.</p>
+                        <financial-planning-panel />
+                    </v-window-item>
                 </v-window>
             </v-card>
         </template>
@@ -235,6 +240,7 @@ import EditDialog from '@/views/desktop/transactions/list/dialogs/EditDialog.vue
 import { ref, computed, useTemplateRef, watch } from 'vue';
 import { useRouter, onBeforeRouteUpdate } from 'vue-router';
 
+import FinancialPlanningPanel from '@/components/planning/FinancialPlanningPanel.vue';
 import { useI18n } from '@/locales/helpers.ts';
 import { TransactionEditPageType } from '@/views/base/transactions/TransactionEditPageBase.ts';
 
@@ -296,7 +302,7 @@ interface InsightsExplorerProps {
 
 const props = defineProps<InsightsExplorerProps>();
 
-type ExplorerPageTabType = 'query' | 'table' | 'chart';
+type ExplorerPageTabType = 'query' | 'table' | 'chart' | 'forecast';
 
 type RenameDialogType = InstanceType<typeof RenameDialog>;
 type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
@@ -438,7 +444,8 @@ const allTabs = computed<{ name: string, value: ExplorerPageTabType }[]>(() => {
         {
             name: tt('Chart'),
             value: 'chart'
-        }
+        },
+        { name: 'Прогноз', value: 'forecast' }
     ];
 });
 
@@ -466,7 +473,7 @@ function init(initProps: InsightsExplorerProps): void {
         }
     }
 
-    if (initProps.initActiveTab === 'query' || initProps.initActiveTab === 'table' || initProps.initActiveTab === 'chart') {
+    if (initProps.initActiveTab === 'query' || initProps.initActiveTab === 'table' || initProps.initActiveTab === 'chart' || initProps.initActiveTab === 'forecast') {
         if (initProps.initActiveTab !== activeTab.value) {
             activeTab.value = initProps.initActiveTab;
         }
