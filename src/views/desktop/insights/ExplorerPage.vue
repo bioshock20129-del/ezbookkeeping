@@ -240,7 +240,7 @@ import EditDialog from '@/views/desktop/transactions/list/dialogs/EditDialog.vue
 import { ref, computed, useTemplateRef, watch } from 'vue';
 import { useRouter, onBeforeRouteUpdate } from 'vue-router';
 
-import FinancialPlanningPanel from '@/components/planning/FinancialPlanningPanel.vue';
+import FinancialPlanningPanel from '@/components/desktop/planning/FinancialPlanningPanel.vue';
 import { useI18n } from '@/locales/helpers.ts';
 import { TransactionEditPageType } from '@/views/base/transactions/TransactionEditPageBase.ts';
 

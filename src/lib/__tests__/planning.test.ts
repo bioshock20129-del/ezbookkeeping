@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { displayMoney, toMinor, flatAccounts, parseFinancialPlan } from '../planning.ts';
+import { describe, expect, it, vi } from 'vitest';
+import axios from 'axios';
+import { displayMoney, toMinor, flatAccounts, parseFinancialPlan, planningRequest, formatPlanningMoney } from '../planning.ts';
 
 describe('financial planning money and import', () => {
     it('uses decimal arithmetic and preserves all minor units', () => {
@@ -17,5 +18,30 @@ describe('financial planning money and import', () => {
         expect(() => parseFinancialPlan('{"budgets":[],"items":[{}]}',4)).toThrow();
         if(p.budgets[0]) p.budgets[0].limit='NaN';
         expect(() => parseFinancialPlan(JSON.stringify(p),4)).toThrow();
+    });
+});
+
+
+describe('planning API version contract', () => {
+    it('uses v1 routes under the shared /api base for reads and preview', async () => {
+        const get = vi.spyOn(axios, 'get').mockResolvedValue({data:{success:true,result:{revision:1}}});
+        const post = vi.spyOn(axios, 'post').mockResolvedValue({data:{success:true,result:{points:[]}}});
+        await planningRequest('planning/get.json');
+        await planningRequest('accounts/list.json');
+        await planningRequest('transaction/categories/list.json');
+        const request={through:'2026-12-01',includeOptional:false};
+        await planningRequest('planning/preview.json',request);
+        expect(get.mock.calls.map(call=>call[0])).toEqual(['v1/planning/get.json','v1/accounts/list.json','v1/transaction/categories/list.json']);
+        expect(post).toHaveBeenCalledWith('v1/planning/preview.json', request);
+    });
+});
+
+
+describe('planning display amounts', () => {
+    it('groups exact minor-unit values without binary floating point', () => {
+        expect(formatPlanningMoney('11811740','RUB')).toBe('118\u00a0117,40 ₽');
+        expect(formatPlanningMoney('2500000','RUB')).toBe('25\u00a0000 ₽');
+        expect(formatPlanningMoney('-12345','USD')).toBe('−123,45 $');
+        expect(formatPlanningMoney('999999999999999','RUB')).toBe('9\u00a0999\u00a0999\u00a0999\u00a0999,99 ₽');
     });
 });

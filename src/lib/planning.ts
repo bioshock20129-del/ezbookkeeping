@@ -11,7 +11,7 @@ export interface ForecastEvent { id: string; name: string; date: string; account
 export interface ForecastResult { asOf: string; through: string; budgets: BudgetReport[]; accounts: PlanningAccount[]; events: ForecastEvent[]; points: {date: string; accountId: string; balance: string}[]; minimum: Record<string, string> }
 export async function planningRequest<T>(path: string, body?: unknown): Promise<T> {
     try {
-        const response = body === undefined ? await axios.get(path) : await axios.post(path, body);
+        const response = body === undefined ? await axios.get('v1/' + path) : await axios.post('v1/' + path, body);
         if (!response.data.success) throw new Error(response.data.errorMessage || 'Не удалось выполнить запрос');
         return response.data.result as T;
     } catch (error) {
@@ -20,11 +20,20 @@ export async function planningRequest<T>(path: string, body?: unknown): Promise<
     }
 }
 export function toMinor(value: string): string {
-    const amount = new Decimal(value.replace(',', '.')).mul(100);
-    if (!amount.isFinite() || !amount.isInteger() || amount.lt(0) || amount.gt('999999999999999')) throw new Error('Введите сумму с точностью до копейки');
-    return amount.toFixed(0);
+    try {
+        const amount = new Decimal(value.trim().replace(',', '.')).mul(100);
+        if (!amount.isFinite() || !amount.isInteger() || amount.lt(0) || amount.gt('999999999999999')) throw new Error('invalid amount');
+        return amount.toFixed(0);
+    } catch { throw new Error('Введите сумму с точностью до копейки'); }
 }
 export function displayMoney(value: string): string { return new Decimal(value).div(100).toFixed(2); }
+export function formatPlanningMoney(minor: string, currency: string): string {
+    const [integer, fraction] = displayMoney(minor).split('.');
+    const grouped = (integer || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0').replace(/^-/, '−');
+    const symbol = ({RUB:'₽',USD:'$',EUR:'€'} as Record<string,string>)[currency] || currency;
+    return `${grouped}${fraction === '00' ? '' : ',' + fraction}${symbol ? ' ' + symbol : ''}`;
+}
+
 export function flatAccounts(items: PlanningAccount[]): PlanningAccount[] { return items.flatMap(a => a.subAccounts?.length ? flatAccounts(a.subAccounts).map(child => ({...child, name: `${a.name} / ${child.name}`})) : a.type === 2 ? [] : [a]); }
 
 export function parseFinancialPlan(source: string, revision: number): FinancialPlan {
