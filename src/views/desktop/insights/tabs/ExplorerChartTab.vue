@@ -1,4 +1,6 @@
 <template>
+    <explorer-comparison v-if="hasComparisonSources" mode="chart" :loading="loading" />
+    <template v-else>
     <v-card-text class="px-4 py-0">
         <v-row>
             <v-col cols="12">
@@ -269,9 +271,11 @@
     </v-card-text>
 
     <transaction-list-dialog ref="transactionListDialog" @click:transaction="onClickTransaction" />
+    </template>
 </template>
 
 <script setup lang="ts">
+import ExplorerComparison from '@/components/desktop/insights/ExplorerComparison.vue';
 import AxisChart, { type AxisChartDisplayType } from '@/components/desktop/AxisChart.vue';
 import RadarChart from '@/components/desktop/RadarChart.vue';
 import HierarchyChart, { type HierarchyChartDisplayType } from '@/components/desktop/HierarchyChart.vue';
@@ -410,6 +414,7 @@ const allTransactionExplorerChartSortingTypes = computed<TypeAndDisplayName[]>((
 const allTransactionExplorerCustomChartDisplayLayouts = computed<TypeAndDisplayName[]>(() => getAllTransactionExplorerCustomChartDisplayLayouts());
 const currentTransactionExplorerCategoryDimensionName = computed<string>(() => findNameByValue(allTransactionExplorerDataDimensions.value, currentExploration.value.categoryDimension) ?? tt('Unknown'));
 
+const hasComparisonSources = computed(() => explorersStore.currentExploration.hasComparisonSources);
 const currentExploration = computed<InsightsExplorer>(() => explorersStore.currentExploration);
 const isUsingAmountRange = computed<boolean>(() => explorersStore.isUsingAmountRange);
 

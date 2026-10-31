@@ -7,7 +7,7 @@ export interface FinancialPlan { revision: number; budgets: PlanningBudget[]; it
 export interface PlanningAccount { id: string; name: string; currency: string; balance: string; isLiability?: boolean; type?: number; subAccounts?: PlanningAccount[] }
 export interface PlanningCategory { id: string; name: string; subCategories?: PlanningCategory[] }
 export interface BudgetReport { id: string; name: string; currency: string; limit: string; spent: string; committed: string; estimated: string; remaining: string }
-export interface ForecastEvent { id: string; name: string; date: string; accountId: string; budgetId: string; amount: string; source: string }
+export interface ForecastEvent { kind: string; id: string; name: string; date: string; accountId: string; budgetId: string; amount: string; source: string }
 export interface ForecastResult { asOf: string; through: string; budgets: BudgetReport[]; accounts: PlanningAccount[]; events: ForecastEvent[]; points: {date: string; accountId: string; balance: string}[]; minimum: Record<string, string> }
 export async function planningRequest<T>(path: string, body?: unknown): Promise<T> {
     try {

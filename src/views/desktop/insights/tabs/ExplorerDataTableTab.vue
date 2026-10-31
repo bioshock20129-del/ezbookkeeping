@@ -1,4 +1,6 @@
 <template>
+    <explorer-comparison v-if="hasComparisonSources" mode="table" :loading="loading" />
+    <template v-else>
     <v-card-text class="px-4 py-0 mb-4">
         <v-row>
             <v-col cols="12">
@@ -214,9 +216,11 @@
             </div>
         </template>
     </v-data-table>
+    </template>
 </template>
 
 <script setup lang="ts">
+import ExplorerComparison from '@/components/desktop/insights/ExplorerComparison.vue';
 import PaginationButtons from '@/components/desktop/PaginationButtons.vue';
 
 import { computed } from 'vue';
@@ -290,6 +294,7 @@ const {
 
 const settingsStore = useSettingsStore();
 const explorersStore = useExplorersStore();
+const hasComparisonSources = computed(() => currentExploration.value.hasComparisonSources);
 
 const filteredTransactionsStatistic = computed<InsightsExplorerTransactionStatisticData | undefined>(() => explorersStore.filteredTransactionsInDataTableStatistic);
 

@@ -54,6 +54,7 @@ type Transaction struct {
 	Time       time.Time
 }
 type Event struct {
+	Kind      string `json:"kind"`
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Date      string `json:"date"`
@@ -140,6 +141,18 @@ func Validate(p Plan) error {
 		}
 	}
 	return nil
+}
+
+func eventKind(kind int) string {
+	switch kind {
+	case 2:
+		return "income"
+	case 3:
+		return "expense"
+	case 4, 5:
+		return "transfer"
+	}
+	return "adjustment"
 }
 
 func signed(t Transaction) int64 {
@@ -264,7 +277,7 @@ func Preview(p Plan, accounts []Account, transactions []Transaction, now, throug
 		if t.Time.After(now) {
 			balances[t.AccountID] -= signed(t)
 			if t.Time.Before(end) {
-				r.Events = append(r.Events, Event{ID: t.ID, Name: "Recorded transaction", Date: day(t.Time.In(loc)), AccountID: t.AccountID, BudgetID: budgetFor(p, t), Amount: signed(t), Source: "actual", at: t.Time})
+				r.Events = append(r.Events, Event{Kind: eventKind(t.Kind), ID: t.ID, Name: "Recorded transaction", Date: day(t.Time.In(loc)), AccountID: t.AccountID, BudgetID: budgetFor(p, t), Amount: signed(t), Source: "actual", at: t.Time})
 			}
 		}
 	}
@@ -305,13 +318,13 @@ func Preview(p Plan, accounts []Account, transactions []Transaction, now, throug
 					amount = -amount
 				}
 				if at.Before(end) {
-					r.Events = append(r.Events, Event{ID: i.ID + "/" + day(at), Name: i.Name, Date: day(at), AccountID: i.AccountID, BudgetID: i.BudgetID, Amount: amount, Source: "planned", at: at})
+					r.Events = append(r.Events, Event{Kind: i.Kind, ID: i.ID + "/" + day(at), Name: i.Name, Date: day(at), AccountID: i.AccountID, BudgetID: i.BudgetID, Amount: amount, Source: "planned", at: at})
 				}
 				if i.BudgetID != "" {
 					committed[i.BudgetID+"/"+month(at)] += i.Amount
 				}
 				if i.Kind == "transfer" && at.Before(end) {
-					r.Events = append(r.Events, Event{ID: i.ID + "/" + day(at) + "/in", Name: i.Name, Date: day(at), AccountID: i.DestinationID, Amount: i.Amount, Source: "planned", at: at})
+					r.Events = append(r.Events, Event{Kind: i.Kind, ID: i.ID + "/" + day(at) + "/in", Name: i.Name, Date: day(at), AccountID: i.DestinationID, Amount: i.Amount, Source: "planned", at: at})
 				}
 			}
 			if i.Frequency == "once" {
@@ -348,7 +361,7 @@ func Preview(p Plan, accounts []Account, transactions []Transaction, now, throug
 					index++
 					at := time.Date(d.Year(), d.Month(), d.Day(), 23, 59, 59, 0, loc)
 					if amount > 0 && at.After(now) {
-						r.Events = append(r.Events, Event{ID: b.ID + "/estimate/" + day(d), Name: b.Name, Date: day(d), AccountID: b.AccountID, BudgetID: b.ID, Amount: -amount, Source: "estimate", at: at})
+						r.Events = append(r.Events, Event{Kind: "expense", ID: b.ID + "/estimate/" + day(d), Name: b.Name, Date: day(d), AccountID: b.AccountID, BudgetID: b.ID, Amount: -amount, Source: "estimate", at: at})
 						estimated[key] += amount
 					}
 				}

@@ -30,7 +30,7 @@
 
         <template #content>
             <v-card min-height="800">
-                <template #title v-if="activeTab !== 'forecast'">
+                <template #title>
                     <div class="title-and-toolbar d-flex align-center">
                         <span>{{ tt('Insights Explorer') }}</span>
                         <v-btn-group class="ms-4" color="default" density="comfortable" variant="outlined" divided>
@@ -76,7 +76,7 @@
                         </v-btn>
                         <v-btn density="compact" color="default" variant="text" class="ms-2"
                                :aria-label="tt('AI Generate Chart Code')" :icon="true" :disabled="loading || updating || isCustomChartInAIMode"
-                               v-if="activeTab === 'chart' && currentExploration.chartType === TransactionExplorerChartTypeValue.Custom && isInsightsExplorerCodingAssistantEnabled()"
+                               v-if="!hasComparisonSources && activeTab === 'chart' && currentExploration.chartType === TransactionExplorerChartTypeValue.Custom && isInsightsExplorerCodingAssistantEnabled()"
                                @click="explorerChartTab?.switchToAIChartMode()">
                             <v-icon :icon="mdiMagicStaff" size="20" />
                             <v-tooltip activator="parent">{{ tt('AI Generate Chart Code') }}</v-tooltip>
@@ -125,7 +125,7 @@
                                         <v-divider class="my-2"/>
                                     </template>
 
-                                    <template v-if="activeTab === 'table'">
+                                    <template v-if="activeTab === 'table' && !hasComparisonSources">
                                         <v-list-item :prepend-icon="mdiTableEdit"
                                                      :title="tt('Enter Edit Mode')"
                                                      :disabled="loading || updating || filteredTransactionsInDataTable.length < 1"
@@ -139,7 +139,7 @@
                                         <v-divider class="my-2" v-if="!isCurrentDataTableEditable"/>
                                     </template>
 
-                                    <template v-if="(activeTab === 'table' && !isCurrentDataTableEditable) || (activeTab === 'chart' && currentExploration.chartType !== TransactionExplorerChartTypeValue.Custom)">
+                                    <template v-if="!hasComparisonSources && ((activeTab === 'table' && !isCurrentDataTableEditable) || (activeTab === 'chart' && currentExploration.chartType !== TransactionExplorerChartTypeValue.Custom))">
                                         <v-list-item :prepend-icon="mdiExport"
                                                      :title="tt('Export Results')"
                                                      :disabled="loading || updating || (activeTab === 'table' && (!filteredTransactionsInDataTable || filteredTransactionsInDataTable.length < 1))"
@@ -194,10 +194,7 @@
                                             :loading="loading" :disabled="loading || updating"
                                             @click:transaction="onShowTransaction" />
                     </v-window-item>
-                    <v-window-item value="forecast">
-                        <p class="ma-4">Прогноз использует бюджеты и планы по счетам, независимо от фильтров исторических выборок.</p>
-                        <financial-planning-panel />
-                    </v-window-item>
+
                 </v-window>
             </v-card>
         </template>
@@ -240,7 +237,6 @@ import EditDialog from '@/views/desktop/transactions/list/dialogs/EditDialog.vue
 import { ref, computed, useTemplateRef, watch } from 'vue';
 import { useRouter, onBeforeRouteUpdate } from 'vue-router';
 
-import FinancialPlanningPanel from '@/components/desktop/planning/FinancialPlanningPanel.vue';
 import { useI18n } from '@/locales/helpers.ts';
 import { TransactionEditPageType } from '@/views/base/transactions/TransactionEditPageBase.ts';
 
@@ -302,7 +298,7 @@ interface InsightsExplorerProps {
 
 const props = defineProps<InsightsExplorerProps>();
 
-type ExplorerPageTabType = 'query' | 'table' | 'chart' | 'forecast';
+type ExplorerPageTabType = 'query' | 'table' | 'chart';
 
 type RenameDialogType = InstanceType<typeof RenameDialog>;
 type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
@@ -412,6 +408,7 @@ const allVisibleExplorations = computed<InsightsExplorerBasicInfo[]>(() => {
 
     return ret;
 });
+const hasComparisonSources = computed(() => currentExploration.value.hasComparisonSources);
 const currentFilter = computed<TransactionExplorerFilter>(() => explorersStore.transactionExplorerFilter);
 const currentExploration = computed<InsightsExplorer>(() => explorersStore.currentExploration);
 const filteredTransactionsInDataTable = computed<TransactionInsightDataItem[]>(() => explorersStore.filteredTransactionsInDataTable);
@@ -444,8 +441,7 @@ const allTabs = computed<{ name: string, value: ExplorerPageTabType }[]>(() => {
         {
             name: tt('Chart'),
             value: 'chart'
-        },
-        { name: 'Прогноз', value: 'forecast' }
+        }
     ];
 });
 
@@ -475,7 +471,7 @@ function init(initProps: InsightsExplorerProps): void {
 
     if (initProps.initActiveTab === 'query' || initProps.initActiveTab === 'table' || initProps.initActiveTab === 'chart' || initProps.initActiveTab === 'forecast') {
         if (initProps.initActiveTab !== activeTab.value) {
-            activeTab.value = initProps.initActiveTab;
+            activeTab.value = initProps.initActiveTab === 'forecast' ? 'chart' : initProps.initActiveTab;
         }
     } else {
         activeTab.value = 'query';

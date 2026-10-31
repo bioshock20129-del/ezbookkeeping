@@ -18,7 +18,8 @@
     "lint": "vue-tsc --noEmit && eslint . --fix",
     "test": "vitest run",
     "test:frontend-startup": "node scripts/check-frontend-startup.mjs",
-    "test:planning-ui": "node scripts/check-planning-ui.mjs"
+    "test:planning-ui": "node scripts/check-planning-ui.mjs",
+    "test:explorer-comparison": "node scripts/check-explorer-comparison.mjs"
   },
   "dependencies": {
     "@mdi/js": "7.4.47",

@@ -209,3 +209,25 @@ func TestUnknownAccountAndAggregateOverflowRejected(t *testing.T) {
 		t.Fatal("overflow accepted")
 	}
 }
+
+// Explorer must distinguish expenses from transfer legs without inferring kind from sign.
+func TestForecastEventsExposeKindForExplorer(t *testing.T) {
+	p := Plan{Budgets: []Budget{budget(1000, true)}, Items: []Item{item("income", "income", "2026-11-05", 100), item("expense", "expense", "2026-11-06", 50), item("transfer", "transfer", "2026-11-07", 20)}}
+	p.Items[2].DestinationID = "b"
+	accounts := append(account(5000), Account{ID: "b", Currency: "RUB"})
+	txs := []Transaction{{ID: "recorded", AccountID: "a", CategoryID: "cat", Kind: 3, Amount: 10, Time: tm("2026-11-08T10:00:00Z")}}
+	r, err := Preview(p, accounts, txs, tm("2026-11-01T00:00:00Z"), tm("2026-11-30T00:00:00Z"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]int{}
+	for _, event := range r.Events {
+		if event.Kind == "" {
+			t.Fatalf("missing kind: %+v", event)
+		}
+		kinds[event.Kind]++
+	}
+	if kinds["income"] != 1 || kinds["transfer"] != 2 || kinds["expense"] < 2 {
+		t.Fatal(kinds)
+	}
+}
