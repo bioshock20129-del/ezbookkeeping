@@ -18,6 +18,24 @@ await api('/api/v1/transaction/categories/add.json',{name:'Продукты',typ
 const future=days=>new Date(Date.now()+days*86400000).toISOString().slice(0,10);
 const item=(id,name,kind,days,amount)=>({id,name,kind,accountId:account.id,destinationId:'',budgetId:'',amount,date:future(days),frequency:'monthly',endDate:'',optional:false,skipDates:[]});
 await api('/api/v1/planning/save.json',{revision:0,budgets:[{id:'food',name:'Продукты и обеды',accountId:account.id,categoryIds:[category.id],limit:'2500000',estimate:true}],items:[item('salary','Зарплата','income',5,'15000000'),item('rent','Аренда квартиры','expense',10,'4000000')]},user.token);
+async function checkDialogSpacing(dialog, label) {
+    const issues=await dialog.evaluate(root=>{
+        const fields=Array.from(root.querySelectorAll('.v-input')).filter(node=>node.getBoundingClientRect().height>0).map(node=>{
+            const bounds=node.getBoundingClientRect();
+            const labels=Array.from(node.querySelectorAll('.v-field-label--floating')).filter(label=>getComputedStyle(label).visibility!=='hidden'&&Number(getComputedStyle(label).opacity)>0).map(label=>label.getBoundingClientRect());
+            return {name:node.textContent.trim().slice(0,50),left:bounds.left,right:bounds.right,top:Math.min(bounds.top,...labels.map(r=>r.top)),bottom:Math.max(bounds.bottom,...labels.map(r=>r.bottom))};
+        });
+        const errors=[];
+        for(let i=0;i<fields.length;i++)for(let j=i+1;j<fields.length;j++){
+            const a=fields[i],b=fields[j];
+            if(Math.min(a.right,b.right)-Math.max(a.left,b.left)<=1)continue;
+            const gap=Math.max(a.top,b.top)-Math.min(a.bottom,b.bottom);
+            if(gap<8)errors.push(`${a.name} / ${b.name}: vertical gap ${gap.toFixed(1)}px`);
+        }
+        return errors;
+    });
+    if(issues.length)throw new Error(`${label}: ${issues.join('; ')}`);
+}
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
 try {
     for(const colorScheme of ['dark','light']) {
@@ -34,6 +52,7 @@ try {
         await page.getByRole('button',{name:'Изменить',exact:true}).first().click();
         const dialog=page.getByRole('dialog');
         await dialog.getByLabel('Название',{exact:true}).fill('Продукты и обеды');
+        await checkDialogSpacing(dialog,'budget editor');
         await dialog.getByRole('button',{name:'Применить',exact:true}).click();
         const saved=page.waitForResponse(response=>response.url().endsWith('/api/v1/planning/save.json')&&response.request().method()==='POST');
         await page.getByRole('button',{name:'Сохранить изменения',exact:true}).click();
@@ -50,6 +69,11 @@ try {
             await page.getByRole('option',{name:'Питание',exact:true}).click();
             await page.keyboard.press('Escape');
             await editor.getByLabel('Месячный лимит',{exact:true}).fill('10000');
+            await checkDialogSpacing(editor,'new budget');
+            if(process.env.PLANNING_SCREENSHOT_DIR)await page.screenshot({path:`${process.env.PLANNING_SCREENSHOT_DIR}/budget-dialog.png`});
+            await page.setViewportSize({width:420,height:920});
+            await checkDialogSpacing(editor,'new budget narrow');
+            await page.setViewportSize({width:1440,height:1050});
             await editor.getByRole('button',{name:'Добавить',exact:true}).click();
             try {await editor.waitFor({state:'hidden',timeout:2000});}catch {throw new Error('Dialog validation failed: '+await editor.innerText());}
             const created=page.waitForResponse(response=>response.url().endsWith('/api/v1/planning/save.json'));
@@ -74,6 +98,15 @@ try {
             await page.getByRole('option',{name:'Накопления · RUB',exact:true}).click();
             await editor.getByLabel('Сумма',{exact:true}).fill('1500');
             await editor.getByLabel('Дата',{exact:true}).fill(future(3));
+            await checkDialogSpacing(editor,'new item');
+            await editor.getByRole('button',{name:'Повторы и уже оплаченные даты',exact:true}).click();
+            await editor.getByLabel('Последняя дата (необязательно)',{exact:true}).waitFor({state:'visible'});
+            await checkDialogSpacing(editor,'new item expanded');
+            if(process.env.PLANNING_SCREENSHOT_DIR)await page.screenshot({path:`${process.env.PLANNING_SCREENSHOT_DIR}/item-dialog.png`});
+            await page.setViewportSize({width:420,height:920});
+            await checkDialogSpacing(editor,'new item narrow');
+            if(process.env.PLANNING_SCREENSHOT_DIR)await page.screenshot({path:`${process.env.PLANNING_SCREENSHOT_DIR}/item-dialog-narrow.png`});
+            await page.setViewportSize({width:1440,height:1050});
             await editor.getByRole('button',{name:'Добавить',exact:true}).click();
             try {await editor.waitFor({state:'hidden',timeout:2000});}catch {throw new Error('Dialog validation failed: '+await editor.innerText());}
             const created=page.waitForResponse(response=>response.url().endsWith('/api/v1/planning/save.json'));
