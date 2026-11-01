@@ -236,6 +236,9 @@ func (a *DataManagementsApi) ClearAllDataHandler(c *core.WebContext) (any, *errs
 		return nil, errs.Or(err, errs.ErrOperationFailed)
 	}
 
+	if err := services.FinancialPlans.Clear(c, uid); err != nil {
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
 	err = a.insightsExploreres.DeleteAllExplorations(c, uid)
 
 	if err != nil {

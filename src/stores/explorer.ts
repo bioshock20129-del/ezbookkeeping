@@ -37,7 +37,8 @@ import {
     type InsightsExplorerInfoResponse,
     type InsightsExplorerMatchContext,
     InsightsExplorer,
-    InsightsExplorerBasicInfo
+    InsightsExplorerBasicInfo,
+    TransactionExplorerQuery,
 } from '@/models/explorer.ts';
 import {
     type CodingAssistantResponse,
@@ -2015,6 +2016,13 @@ export const useExplorersStore = defineStore('explorers', () => {
         allExplorationBasicInfosMap,
         currentExploration,
         insightsExplorerListStateInvalid,
+        comparisonFactsForQuery: (query: TransactionExplorerQuery) => allTransactions.value.filter(t => query.source !== 'actual' || query.match(t, buildInsightsExplorerMatchContext(currentExploration.value,t))).map(t => ({
+            id:t.id, date:buildInsightsExplorerMatchContext(currentExploration.value,t).getTransactionDateTime().getGregorianCalendarYearDashMonthDashDay(),
+            time:t.time, kind:t.type, accountId:t.sourceAccountId, destinationId:t.destinationAccountId,
+            currency:t.sourceAccount.currency, destinationCurrency:t.destinationAccount?.currency || t.sourceAccount.currency,
+            amount:String(t.sourceAmount), destinationAmount:String(t.destinationAmount),
+            categoryIds:[t.primaryCategory.id,t.secondaryCategory.id]
+        })),
         // computed
         isUsingAmountRange,
         filteredTransactionsInDataTable,

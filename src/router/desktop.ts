@@ -17,6 +17,7 @@ import TransactionListPage from '@/views/desktop/transactions/ListPage.vue';
 
 import StatisticsTransactionPage from '@/views/desktop/statistics/TransactionPage.vue';
 
+import FinancialPlanningPage from '@/views/desktop/planning/PlanningPage.vue';
 import InsightsExplorerPage from '@/views/desktop/insights/ExplorerPage.vue';
 
 import AccountListPage from '@/views/desktop/accounts/ListPage.vue';
@@ -145,6 +146,9 @@ const router = createRouter({
                 initTrendDateAggregationType: route.query['trendDateAggregationType'],
                 initAssetTrendsDateAggregationType: route.query['assetTrendsDateAggregationType']
             })
+        },
+        {
+            path: '/planning', component: FinancialPlanningPage, beforeEnter: checkLogin
         },
         {
             path: '/insights/explorer',

@@ -476,6 +476,9 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.POST("/transaction/templates/delete.json", bindApi(api.TransactionTemplates.TemplateDeleteHandler, config))
 
 			// Insights Explorers
+			apiV1Route.GET("/planning/get.json", bindApi(api.FinancialPlanning.Get, config))
+			apiV1Route.POST("/planning/save.json", bindApi(api.FinancialPlanning.Save, config))
+			apiV1Route.POST("/planning/preview.json", bindApi(api.FinancialPlanning.Preview, config))
 			apiV1Route.GET("/insights/explorers/list.json", bindApi(api.InsightsExplorers.InsightsExplorerListHandler, config))
 			apiV1Route.GET("/insights/explorers/get.json", bindApi(api.InsightsExplorers.InsightsExplorerGetHandler, config))
 			apiV1Route.POST("/insights/explorers/add.json", bindApi(api.InsightsExplorers.InsightsExplorerCreateHandler, config))

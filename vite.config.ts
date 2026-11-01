@@ -276,6 +276,12 @@ export default defineConfig(() => {
                         includeDependenciesRecursively: false,
                         groups: [
                             {
+                                // Shared virtual helpers must not be owned by an application
+                                // component: vendor -> component -> vendor causes startup cycles.
+                                name: 'shared-runtime',
+                                test: id => /(?:__vite-browser-external|plugin-vue:export-helper|vite[\/]preload-helper)/i.test(id)
+                            },
+                            {
                                 name:  'leaflet',
                                 test: /[\\/]node_modules[\\/]leaflet[\\/]/i
                             },

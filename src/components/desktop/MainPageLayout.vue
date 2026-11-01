@@ -66,6 +66,7 @@
                                     </v-btn>
                                 </router-link>
 
+                                <router-link to="/planning"><v-btn class="ms-1" variant="text">Бюджеты</v-btn></router-link>
                                 <router-link to="/insights/explorer"
                                              :aria-current="isTopNavigationActive('/insights/explorer') ? 'page' : undefined">
                                     <v-btn class="top-navigation-button ms-1" density="comfortable" variant="text"

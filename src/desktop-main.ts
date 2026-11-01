@@ -71,7 +71,9 @@ import {
     CalendarComponent,
     TooltipComponent,
     LegendComponent,
-    VisualMapComponent
+    VisualMapComponent,
+    DataZoomComponent,
+    MarkLineComponent
 } from 'echarts/components';
 import VChart from 'vue-echarts';
 
@@ -549,7 +551,9 @@ echarts.use([
     CalendarComponent,
     TooltipComponent,
     LegendComponent,
-    VisualMapComponent
+    VisualMapComponent,
+    DataZoomComponent,
+    MarkLineComponent
 ]);
 
 app.use(pinia);

@@ -16,7 +16,10 @@
     "build": "cross-env NODE_ENV=production vite build",
     "serve:dist": "vite preview",
     "lint": "vue-tsc --noEmit && eslint . --fix",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:frontend-startup": "node scripts/check-frontend-startup.mjs",
+    "test:planning-ui": "node scripts/check-planning-ui.mjs",
+    "test:explorer-comparison": "node scripts/check-explorer-comparison.mjs"
   },
   "dependencies": {
     "@mdi/js": "7.4.47",
@@ -65,6 +68,7 @@
     "eslint": "10.10.0",
     "eslint-plugin-vue": "10.11.0",
     "git-rev-sync": "3.0.2",
+    "playwright-core": "1.64.1",
     "postcss-preset-env": "11.5.2",
     "sass": "1.104.0",
     "terser": "5.51.2",

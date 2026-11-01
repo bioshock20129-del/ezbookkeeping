@@ -164,3 +164,7 @@ Currently available translations:
 
 ## License
 [MIT](https://github.com/mayswind/ezbookkeeping/blob/master/LICENSE)
+
+## Fork: budgets and cashflow forecasts
+
+This fork adds an experimental budgets/planning screen and budget/forecast sources in Insights Explorer. These features are included in `main`, based on ezBookKeeping v2.2.0. See [setup and current limitations](docs/budgets-forecast-usage.ru.md). Forecasts never create ledger transactions.

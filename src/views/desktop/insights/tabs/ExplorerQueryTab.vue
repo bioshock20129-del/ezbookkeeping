@@ -4,6 +4,7 @@
             <v-btn color="default" variant="outlined"
                    :disabled="loading || disabled || !!editingQuery"
                    @click="addQuery">{{ tt('Add Query') }}</v-btn>
+            <v-btn class="ms-3" variant="tonal" :disabled="loading || disabled || !budgets.length" @click="showPreset = true">Факт / бюджет / прогноз</v-btn>
             <v-spacer />
             <v-btn color="secondary" variant="tonal"
                    :disabled="loading || disabled || !!editingQuery || queries.length < 1"
@@ -61,7 +62,7 @@
                             <v-tooltip activator="parent">{{ tt('Duplicate') }}</v-tooltip>
                         </v-btn>
                         <v-spacer />
-                        <v-switch class="bidirectional-switch ms-2" color="secondary"
+                        <v-switch v-if="element.source === 'actual'" class="bidirectional-switch ms-2" color="secondary"
                                   :disabled="loading || disabled || !!editingQuery || !element.conditions || element.conditions.length < 1"
                                   :label="tt('Expression')"
                                   v-model="showExpression[element.id]"
@@ -71,7 +72,7 @@
                             </template>
                         </v-switch>
                         <v-btn class="ms-2" density="compact" color="default" variant="text"
-                               :aria-label="tt('Remove Query')" :disabled="loading || disabled || !!editingQuery || queries.length < 1 || (queries.length === 1 && (!element.conditions || element.conditions.length < 1))" :icon="true"
+                               :aria-label="tt('Remove Query')" :disabled="loading || disabled || !!editingQuery || queries.length < 1 || (queries.length === 1 && element.source === 'actual' && (!element.conditions || element.conditions.length < 1))" :icon="true"
                                @click="removeQuery(element, index)">
                             <v-icon :icon="mdiClose" size="18" />
                             <v-tooltip activator="parent">{{ tt('Remove Query') }}</v-tooltip>
@@ -86,7 +87,8 @@
                     <v-divider />
 
                     <v-card-text>
-                        <v-row>
+                        <explorer-source-settings :query="element" :queries="queries" :budgets="budgets" :accounts="sourceAccounts" :disabled="loading || disabled || !!editingQuery" :plan-error="planError" @retry="loadPlan" />
+                        <v-row v-if="element.source === 'actual'" class="mt-4">
                             <v-col cols="12">
                                 <div class="text-center py-4" v-if="loading">
                                     <v-skeleton-loader class="skeleton-no-margin ms-3" type="text" :loading="true"></v-skeleton-loader>
@@ -500,6 +502,15 @@
                                      v-model:show="showFilterTransactionCategoriesDialog"
                                      @settings:change="updateTransactionCategories" />
 
+    <v-dialog v-model="showPreset" max-width="560">
+        <v-card title="Сравнение с бюджетом">
+            <v-card-text class="pt-4">
+                <v-select label="Бюджет" :items="budgets" item-title="name" item-value="id" v-model="presetBudget" hide-details />
+                <p class="mt-5">Добавятся четыре запроса: факт, бюджет, прогноз по планам и превышение бюджета. Счёт и категории будут одинаковыми. Период выбирается над вкладками.</p>
+            </v-card-text>
+            <v-card-actions><v-btn @click="showPreset = false">Отмена</v-btn><v-btn color="primary" :disabled="!presetBudget" @click="addComparisonPreset">Добавить</v-btn></v-card-actions>
+        </v-card>
+    </v-dialog>
     <snack-bar ref="snackbar" />
 </template>
 
@@ -509,7 +520,9 @@ import CategoryFilterSettingsDialog from '@/views/desktop/common/dialogs/Categor
 
 import SnackBar from '@/components/desktop/SnackBar.vue';
 
-import { ref, computed, useTemplateRef, watch } from 'vue';
+import { ref, computed, useTemplateRef, watch, onMounted } from 'vue';
+import ExplorerSourceSettings from '@/components/desktop/insights/ExplorerSourceSettings.vue';
+import { planningRequest, type FinancialPlan, type PlanningBudget } from '@/lib/planning.ts';
 
 import { useI18n } from '@/locales/helpers.ts';
 
@@ -602,6 +615,26 @@ const queries = computed<TransactionExplorerQuery[]>({
         explorersStore.currentExploration.queries = value;
     }
 });
+
+const budgets = ref<PlanningBudget[]>([]);
+const planError = ref('');
+const showPreset = ref(false);
+const presetBudget = ref('');
+const sourceAccounts = computed(() => accountsStore.allPlainAccounts.filter(a => a.type !== AccountType.MultiSubAccounts.type).map(a => ({id:a.id,name:`${a.name} · ${a.currency}`})));
+async function loadPlan() {
+    try { const plan=await planningRequest<FinancialPlan>('planning/get.json'); budgets.value=plan.budgets;planError.value=''; }
+    catch {planError.value='Не удалось загрузить бюджеты. Проверьте доступность API планирования.';}
+}
+function addComparisonPreset() {
+    const budget=budgets.value.find(b=>b.id===presetBudget.value);if(!budget)return;
+    if(queries.value.length===1&&queries.value[0]?.source==='actual'&&!queries.value[0].conditions.length&&!queries.value[0].name)queries.value=[];
+    const actual=TransactionExplorerQuery.create(generateRandomUUID());actual.name=budget.name+' · факт';actual.budgetIds=[budget.id];actual.accountIds=[budget.accountId];
+    const planned=actual.clone(generateRandomUUID());planned.name=budget.name+' · бюджет';planned.source='budget';
+    const forecast=actual.clone(generateRandomUUID());forecast.name=budget.name+' · прогноз';forecast.source='forecast';
+    const difference=TransactionExplorerQuery.create(generateRandomUUID());difference.name=budget.name+' · факт − бюджет';difference.source='difference';difference.leftQueryId=actual.id;difference.rightQueryId=planned.id;
+    queries.value.push(actual,planned,forecast,difference);showPreset.value=false;
+}
+onMounted(loadPlan);
 
 const defaultCurrency = computed<string>(() => userStore.currentUserDefaultCurrency);
 const hasAnyAccount = computed<boolean>(() => accountsStore.allPlainAccounts.length > 0);

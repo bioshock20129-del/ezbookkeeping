@@ -1,6 +1,7 @@
 <template>
     <main-page-layout>
         <template #nav-items>
+            <router-link to="/planning" class="d-block ma-3">Бюджеты и прогноз</router-link>
             <div class="mb-2">
                 <btn-vertical-group :disabled="loading || updating || isCustomChartAIGenerating || isCurrentDataTableEditable" :buttons="allTabs" v-model="activeTab" />
             </div>
@@ -75,7 +76,7 @@
                         </v-btn>
                         <v-btn density="compact" color="default" variant="text" class="ms-2"
                                :aria-label="tt('AI Generate Chart Code')" :icon="true" :disabled="loading || updating || isCustomChartInAIMode"
-                               v-if="activeTab === 'chart' && currentExploration.chartType === TransactionExplorerChartTypeValue.Custom && isInsightsExplorerCodingAssistantEnabled()"
+                               v-if="!hasComparisonSources && activeTab === 'chart' && currentExploration.chartType === TransactionExplorerChartTypeValue.Custom && isInsightsExplorerCodingAssistantEnabled()"
                                @click="explorerChartTab?.switchToAIChartMode()">
                             <v-icon :icon="mdiMagicStaff" size="20" />
                             <v-tooltip activator="parent">{{ tt('AI Generate Chart Code') }}</v-tooltip>
@@ -124,7 +125,7 @@
                                         <v-divider class="my-2"/>
                                     </template>
 
-                                    <template v-if="activeTab === 'table'">
+                                    <template v-if="activeTab === 'table' && !hasComparisonSources">
                                         <v-list-item :prepend-icon="mdiTableEdit"
                                                      :title="tt('Enter Edit Mode')"
                                                      :disabled="loading || updating || filteredTransactionsInDataTable.length < 1"
@@ -138,7 +139,7 @@
                                         <v-divider class="my-2" v-if="!isCurrentDataTableEditable"/>
                                     </template>
 
-                                    <template v-if="(activeTab === 'table' && !isCurrentDataTableEditable) || (activeTab === 'chart' && currentExploration.chartType !== TransactionExplorerChartTypeValue.Custom)">
+                                    <template v-if="!hasComparisonSources && ((activeTab === 'table' && !isCurrentDataTableEditable) || (activeTab === 'chart' && currentExploration.chartType !== TransactionExplorerChartTypeValue.Custom))">
                                         <v-list-item :prepend-icon="mdiExport"
                                                      :title="tt('Export Results')"
                                                      :disabled="loading || updating || (activeTab === 'table' && (!filteredTransactionsInDataTable || filteredTransactionsInDataTable.length < 1))"
@@ -193,6 +194,7 @@
                                             :loading="loading" :disabled="loading || updating"
                                             @click:transaction="onShowTransaction" />
                     </v-window-item>
+
                 </v-window>
             </v-card>
         </template>
@@ -406,6 +408,7 @@ const allVisibleExplorations = computed<InsightsExplorerBasicInfo[]>(() => {
 
     return ret;
 });
+const hasComparisonSources = computed(() => currentExploration.value.hasComparisonSources);
 const currentFilter = computed<TransactionExplorerFilter>(() => explorersStore.transactionExplorerFilter);
 const currentExploration = computed<InsightsExplorer>(() => explorersStore.currentExploration);
 const filteredTransactionsInDataTable = computed<TransactionInsightDataItem[]>(() => explorersStore.filteredTransactionsInDataTable);
@@ -466,9 +469,9 @@ function init(initProps: InsightsExplorerProps): void {
         }
     }
 
-    if (initProps.initActiveTab === 'query' || initProps.initActiveTab === 'table' || initProps.initActiveTab === 'chart') {
+    if (initProps.initActiveTab === 'query' || initProps.initActiveTab === 'table' || initProps.initActiveTab === 'chart' || initProps.initActiveTab === 'forecast') {
         if (initProps.initActiveTab !== activeTab.value) {
-            activeTab.value = initProps.initActiveTab;
+            activeTab.value = initProps.initActiveTab === 'forecast' ? 'chart' : initProps.initActiveTab;
         }
     } else {
         activeTab.value = 'query';

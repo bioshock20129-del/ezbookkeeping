@@ -2,6 +2,7 @@ import type { Router } from 'framework7/types';
 
 import { isUserLogined, isUserUnlocked } from '@/lib/userstate.ts';
 
+import FinancialPlanningPage from '@/views/mobile/planning/PlanningPage.vue';
 import HomePage from '@/views/mobile/HomePage.vue';
 import LoginPage from '@/views/mobile/LoginPage.vue';
 import SignUpPage from '@/views/mobile/SignupPage.vue';
@@ -182,6 +183,9 @@ const routes: Router.RouteParameters[] = [
         path: '/transaction/detail',
         async: asyncResolve(TransactionEditPage),
         beforeEnter: [checkLogin]
+    },
+    {
+        path: '/planning', component: FinancialPlanningPage, beforeEnter: [checkLogin]
     },
     {
         path: '/account/list',

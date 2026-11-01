@@ -79,6 +79,9 @@ export class InsightsExplorer implements InsightsExplorerInfoResponse {
     public chartSortingType: number;
     public customChartDisplayLayout: number;
     public customChartScript: string;
+    public comparisonCumulative: boolean = true;
+    public comparisonChart: 'line'|'bar' = 'line';
+    public comparisonCurrency: string = '';
 
     public static readonly Default: InsightsExplorer = new InsightsExplorer(
         '',
@@ -118,6 +121,10 @@ export class InsightsExplorer implements InsightsExplorerInfoResponse {
         this.customChartScript = customChartScript;
     }
 
+    public get hasComparisonSources(): boolean {
+        return this.queries.some(query => query.source !== 'actual' || query.budgetIds.length > 0 || query.accountIds.length > 0 || query.flow !== 'expense');
+    }
+
     public get data(): Record<string, string | number | object[]> {
         return {
             queries: this.queries.map(q => q.toJsonObject()),
@@ -131,7 +138,10 @@ export class InsightsExplorer implements InsightsExplorerInfoResponse {
             valueMetric: this.valueMetric,
             chartSortingType: this.chartSortingType,
             customChartDisplayLayout: this.customChartDisplayLayout,
-            customChartScript: this.customChartScript
+            customChartScript: this.customChartScript,
+            comparisonCumulative: this.comparisonCumulative ? 1 : 0,
+            comparisonChart: this.comparisonChart,
+            comparisonCurrency: this.comparisonCurrency
         };
     }
 
@@ -238,7 +248,7 @@ export class InsightsExplorer implements InsightsExplorerInfoResponse {
             }
         }
 
-        return new InsightsExplorer(
+        const explorer = new InsightsExplorer(
             explorerResponse.id,
             explorerResponse.name,
             explorerResponse.displayOrder,
@@ -256,6 +266,10 @@ export class InsightsExplorer implements InsightsExplorerInfoResponse {
             customChartDisplayLayout,
             customChartScript
         );
+        explorer.comparisonCumulative = data?.['comparisonCumulative'] !== 0;
+        explorer.comparisonChart = data?.['comparisonChart'] === 'bar' ? 'bar' : 'line';
+        explorer.comparisonCurrency = typeof data?.['comparisonCurrency'] === 'string' ? data['comparisonCurrency'] : '';
+        return explorer;
     }
 
     public static createNewExplorer(newQueryId: string): InsightsExplorer {
@@ -325,7 +339,18 @@ interface ExpressionNode {
     operator?: TransactionExplorerConditionRelation;
 }
 
+export type ExplorerQuerySource = 'actual' | 'budget' | 'forecast' | 'difference';
+export type ExplorerQueryFlow = 'expense' | 'income' | 'net';
+
 export class TransactionExplorerQuery {
+    public source: ExplorerQuerySource = 'actual';
+    public budgetIds: string[] = [];
+    public accountIds: string[] = [];
+    public flow: ExplorerQueryFlow = 'expense';
+    public forecastMethod: 'plans' | 'pace' = 'plans';
+    public includeOptional: boolean = false;
+    public leftQueryId: string = '';
+    public rightQueryId: string = '';
     public id: string;
     public name: string;
     public conditions: TransactionExplorerConditionWithRelation[];
@@ -407,6 +432,7 @@ export class TransactionExplorerQuery {
     }
 
     public match(transaction: TransactionInsightDataItem, context: InsightsExplorerMatchContext): boolean {
+        if (this.source !== 'actual') return false;
         if (!this.conditions || this.conditions.length < 1) {
             return true;
         }
@@ -630,13 +656,21 @@ export class TransactionExplorerQuery {
             clonedConditions.push(clonedCondition);
         }
 
-        return new TransactionExplorerQuery(newId, this.name, clonedConditions);
+        const query = new TransactionExplorerQuery(newId, this.name, clonedConditions);
+        Object.assign(query, this.sourceOptions());
+        return query;
+    }
+
+    public sourceOptions() {
+        return {source:this.source, budgetIds:[...this.budgetIds], accountIds:[...this.accountIds], flow:this.flow,
+            forecastMethod:this.forecastMethod, includeOptional:this.includeOptional, leftQueryId:this.leftQueryId, rightQueryId:this.rightQueryId};
     }
 
     public toJsonObject(): object {
         return {
             id: this.id,
             name: this.name,
+            ...this.sourceOptions(),
             conditions: this.conditions.map(condition => condition.toJsonObject())
         };
     }
@@ -690,7 +724,22 @@ export class TransactionExplorerQuery {
             return null; // unbalanced parentheses
         }
 
-        return new TransactionExplorerQuery(id, name, conditions);
+        const query = new TransactionExplorerQuery(id, name, conditions);
+        const data = obj as Record<string, unknown>;
+        if (data['source'] !== undefined && (typeof data['source'] !== 'string' || !['actual','budget','forecast','difference'].includes(data['source']))) return null;
+        query.source = (data['source'] ?? 'actual') as ExplorerQuerySource;
+        for (const key of ['budgetIds','accountIds'] as const) {
+            if (data[key] !== undefined && (!Array.isArray(data[key]) || !(data[key] as unknown[]).every(v=>typeof v==='string'))) return null;
+            query[key] = [...(data[key] as string[] || [])];
+        }
+        if(data['flow'] !== undefined && (typeof data['flow'] !== 'string' || !['expense','income','net'].includes(data['flow'])))return null;
+        query.flow=(data['flow'] ?? 'expense') as ExplorerQueryFlow;
+        if(data['forecastMethod'] !== undefined && (typeof data['forecastMethod'] !== 'string' || !['plans','pace'].includes(data['forecastMethod'])))return null;
+        query.forecastMethod=(data['forecastMethod'] ?? 'plans') as 'plans'|'pace';
+        if(data['includeOptional'] !== undefined && typeof data['includeOptional'] !== 'boolean')return null;
+        query.includeOptional=data['includeOptional'] === true;
+        for(const key of ['leftQueryId','rightQueryId'] as const) {if(data[key]!==undefined&&typeof data[key]!=='string')return null;query[key]=(data[key] as string)||'';}
+        return query;
     }
 }
 
