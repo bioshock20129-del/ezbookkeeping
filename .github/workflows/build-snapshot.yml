@@ -7,6 +7,8 @@ on:
 
 jobs:
   setup:
+    # The finance fork has its own amd64 GHCR pipeline.
+    if: github.repository == 'mayswind/ezbookkeeping'
     runs-on: ubuntu-latest
     outputs:
       docker-push: ${{ steps.variable.outputs.docker_push }}

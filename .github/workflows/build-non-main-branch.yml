@@ -8,6 +8,8 @@ on:
 
 jobs:
   setup:
+    # The finance fork has its own amd64 GHCR pipeline.
+    if: github.repository == 'mayswind/ezbookkeeping'
     runs-on: ubuntu-latest
     outputs:
       build-unix-time: ${{ steps.variable.outputs.build_unix_time }}
