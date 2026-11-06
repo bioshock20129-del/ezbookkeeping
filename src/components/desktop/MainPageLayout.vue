@@ -66,7 +66,13 @@
                                     </v-btn>
                                 </router-link>
 
-                                <router-link to="/planning"><v-btn class="ms-1" variant="text">Бюджеты</v-btn></router-link>
+                                <router-link to="/planning" :aria-current="isTopNavigationActive('/planning') ? 'page' : undefined">
+                                    <v-btn class="top-navigation-button ms-1" density="comfortable" variant="text" aria-label="Бюджеты и прогноз" icon
+                                           :active="isTopNavigationActive('/planning')" :color="isTopNavigationActive('/planning') ? 'primary' : 'default'">
+                                        <v-icon :icon="isTopNavigationActive('/planning') ? mdiWallet : mdiWalletOutline" size="24" />
+                                        <v-tooltip activator="parent">Бюджеты и прогноз</v-tooltip>
+                                    </v-btn>
+                                </router-link>
                                 <router-link to="/insights/explorer"
                                              :aria-current="isTopNavigationActive('/insights/explorer') ? 'page' : undefined">
                                     <v-btn class="top-navigation-button ms-1" density="comfortable" variant="text"
@@ -211,6 +217,8 @@ import {
     mdiCreditCardOutline,
     mdiChartPie,
     mdiChartPieOutline,
+    mdiWallet,
+    mdiWalletOutline,
     mdiCompass,
     mdiCompassOutline,
     mdiPlus,

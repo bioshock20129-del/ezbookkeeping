@@ -18,7 +18,7 @@
         <v-skeleton-loader v-if="busy && !loaded" type="heading, table" />
         <template v-if="loaded">
             <div class="planning-overview mb-6">
-                <v-card class="planning-card" variant="flat" rounded="lg"><v-card-text><span class="text-body-medium text-medium-emphasis">Месячные бюджеты</span><div class="text-headline-large mt-2">{{ plan.budgets.length }}</div><div class="text-body-medium text-medium-emphasis mt-1">Лимиты по счетам и категориям</div></v-card-text></v-card>
+                <v-card class="planning-card" variant="flat" rounded="lg"><v-card-text><span class="text-body-medium text-medium-emphasis">План на месяц</span><div v-for="total in monthlyTotals" :key="total.currency" class="text-headline-large mt-2 amount">{{ totalMoney(total.limit, total.currency) }}</div><div v-if="!monthlyTotals.length" class="text-headline-large mt-2">—</div><div class="text-body-medium text-medium-emphasis mt-1">Бюджетов: {{ plan.budgets.length }} · сумма месячных лимитов</div></v-card-text></v-card>
                 <v-card class="planning-card" variant="flat" rounded="lg"><v-card-text><span class="text-body-medium text-medium-emphasis">Доходы и платежи</span><div class="text-headline-large mt-2">{{ plan.items.length }}</div><div class="text-body-medium text-medium-emphasis mt-1">Разовые и ежемесячные планы</div></v-card-text></v-card>
                 <v-card class="planning-card" variant="flat" rounded="lg"><v-card-text><span class="text-body-medium text-medium-emphasis">Горизонт прогноза</span><div class="text-headline-large mt-2">{{ horizonDays }} <span class="text-body-large">дней</span></div><div class="text-body-medium text-medium-emphasis mt-1">До {{ dateLabel(through) }}</div></v-card-text></v-card>
             </div>
@@ -29,10 +29,10 @@
                         <div class="section-heading"><div><h2 class="text-title-large">Бюджеты текущего месяца</h2><p class="text-body-medium text-medium-emphasis mt-1">Факт, предстоящие платежи и доступный остаток.</p></div><v-btn color="primary" variant="tonal" :disabled="busy || accounts.length === 0 || expenseCategories.length === 0" @click="editBudget()">Добавить бюджет</v-btn></div>
                         <v-alert v-if="!accounts.length || !expenseCategories.length" type="info" variant="tonal" class="mb-4">Сначала добавьте счёт и категории расходов в ezBookKeeping.</v-alert>
                         <div v-if="!plan.budgets.length" class="planning-empty"><v-icon :icon="mdiWalletOutline" size="42" color="primary" /><h3 class="text-title-large mt-4">Бюджетов пока нет</h3><p class="text-body-medium text-medium-emphasis mt-2">Создайте первый бюджет — например, на продукты или транспорт.</p></div>
-                        <v-table v-else><thead><tr><th>Бюджет</th><th>Счёт</th><th class="text-end">Лимит</th><th class="text-end">Потрачено</th><th class="text-end">Остаток*</th><th aria-label="Действия" /></tr></thead><tbody><tr v-for="b in plan.budgets" :key="b.id">
+                        <v-table v-else><thead><tr><th>Бюджет</th><th>Счёт</th><th class="text-end">Лимит</th><th class="text-end">Потрачено</th><th class="text-end">Предстоит</th><th class="text-end">Остаток*</th><th aria-label="Действия" /></tr></thead><tbody><tr v-for="b in plan.budgets" :key="b.id">
                             <td class="py-4"><div class="font-weight-medium">{{ b.name }}</div><div class="text-body-small text-medium-emphasis mt-1">{{ categoryLabel(b) }}</div><v-progress-linear v-if="report(b.id)" :model-value="progress(b)" :color="Number(report(b.id)?.remaining) < 0 ? 'error' : 'primary'" rounded class="mt-2" /></td>
-                            <td>{{ accountName(b.accountId) }}</td><td class="text-end amount">{{ money(b.limit, b.accountId) }}</td><td class="text-end amount">{{ report(b.id) ? money(report(b.id)!.spent, b.accountId) : '—' }}</td><td class="text-end amount" :class="{ 'text-error': Number(report(b.id)?.remaining) < 0 }">{{ report(b.id) ? money(report(b.id)!.remaining, b.accountId) : '—' }}</td><td><v-btn variant="text" size="small" @click="editBudget(b)" :disabled="busy">Изменить</v-btn><v-btn icon variant="text" size="small" :disabled="busy" @click="removeBudget(b.id)" aria-label="Удалить бюджет"><v-icon :icon="mdiDeleteOutline" /></v-btn></td>
-                        </tr></tbody></v-table>
+                            <td>{{ accountName(b.accountId) }}</td><td class="text-end amount">{{ money(b.limit, b.accountId) }}</td><td class="text-end amount">{{ report(b.id) ? money(report(b.id)!.spent, b.accountId) : '—' }}</td><td class="text-end amount">{{ report(b.id) ? money(report(b.id)!.committed, b.accountId) : '—' }}</td><td class="text-end amount" :class="{ 'text-error': Number(report(b.id)?.remaining) < 0 }">{{ report(b.id) ? money(report(b.id)!.remaining, b.accountId) : '—' }}</td><td><v-btn variant="text" size="small" @click="editBudget(b)" :disabled="busy">Изменить</v-btn><v-btn icon variant="text" size="small" :disabled="busy" @click="removeBudget(b.id)" aria-label="Удалить бюджет"><v-icon :icon="mdiDeleteOutline" /></v-btn></td>
+                        </tr></tbody><tfoot><tr v-for="total in monthlyTotals" :key="total.currency" class="font-weight-bold"><td colspan="2">Итого за месяц · {{ total.currency || 'валюта не выбрана' }}</td><td class="text-end amount">{{ totalMoney(total.limit, total.currency) }}</td><td class="text-end amount">{{ totalMoney(total.spent, total.currency) }}</td><td class="text-end amount">{{ totalMoney(total.committed, total.currency) }}</td><td class="text-end amount">{{ totalMoney(total.remaining, total.currency) }}</td><td /></tr></tfoot></v-table>
                         <p v-if="plan.budgets.length" class="text-body-small text-medium-emphasis mt-4">* Лимит за вычетом факта и явных будущих платежей. При изменении плана сохраните его для обновления расчётов.</p>
                     </template>
                     <template v-else-if="tab === 'items'">
@@ -65,7 +65,7 @@
             <v-select v-model="budgetDraft.accountId" :items="accountOptions" item-title="title" item-value="value" label="Счёт" />
             <v-autocomplete v-model="budgetDraft.categoryIds" :items="expenseCategories" item-title="name" item-value="id" multiple chips closable-chips label="Категории расходов" />
             <v-text-field v-model="budgetDraft.amount" label="Месячный лимит" inputmode="decimal" :suffix="currency(budgetDraft.accountId)" />
-            <v-switch v-model="budgetDraft.estimate" label="Учитывать остаток в прогнозе" color="primary" hide-details /><p class="text-body-medium text-medium-emphasis mt-2">Оставшаяся после факта и явных платежей сумма распределится по дням месяца. Если выключено, бюджет будет только лимитом.</p>
+            <v-switch v-model="budgetDraft.estimate" label="Учесть остаток бюджета в конце месяца" color="primary" hide-details /><p class="text-body-medium text-medium-emphasis mt-2">Остаток после факта и датированных платежей учитывается одним расходом в последний день месяца. По умолчанию прогноз использует только операции и планы с датами.</p>
         </v-card-text><v-card-actions class="pa-5"><v-spacer /><v-btn variant="text" @click="budgetDialog = false">Отмена</v-btn><v-btn color="primary" variant="flat" @click="applyBudget">{{ budgetDraft.id ? 'Применить' : 'Добавить' }}</v-btn></v-card-actions></v-card></v-dialog>
         <v-dialog v-model="itemDialog" max-width="720" persistent scrollable><v-card rounded="lg"><v-card-title class="pa-6">{{ itemDraft.id ? 'Изменить план' : 'Новый доход или платёж' }}</v-card-title><v-card-text class="planning-dialog-form">
             <v-alert v-if="dialogError" type="error" variant="tonal" class="mb-4">{{ dialogError }}</v-alert><v-text-field v-model="itemDraft.name" label="Название" placeholder="Например, зарплата или аренда" maxlength="64" autofocus /><v-select v-model="itemDraft.kind" :items="kinds" item-title="title" item-value="value" label="Тип" @update:model-value="itemDraft.budgetId = ''; itemDraft.destinationId = ''" />
@@ -83,9 +83,11 @@
 import { computed, ref, watch } from 'vue';
 import { mdiDotsVertical, mdiDeleteOutline, mdiWalletOutline, mdiCalendarClockOutline, mdiChartTimelineVariant } from '@mdi/js';
 import { useFinancialPlanning } from '@/lib/useFinancialPlanning.ts';
-import { displayMoney, formatPlanningMoney, toMinor, type PlanningBudget, type PlanningItem } from '@/lib/planning.ts';
+import { displayMoney, formatPlanningMoney, monthlyBudgetTotals, toMinor, type PlanningBudget, type PlanningItem } from '@/lib/planning.ts';
 import { generateRandomUUID } from '@/lib/misc.ts';
 const {plan,accounts,expenseCategories,result,busy,dirty,loaded,error,notice,through,includeOptional,localDate,changed,load,save,preview,removeBudget,accountName,download,restore} = useFinancialPlanning();
+const monthlyTotals=computed(()=>monthlyBudgetTotals(plan.value.budgets,accounts.value,result.value?.budgets));
+const totalMoney=(value:string|null,currency:string)=>value===null?'—':formatPlanningMoney(value,currency||'(валюта не выбрана)');
 const tab=ref('budgets'), fileInput=ref<HTMLInputElement>(), budgetDialog=ref(false), itemDialog=ref(false), dialogError=ref(''), selectedAccount=ref(''), page=ref(1);
 const horizons=[{title:'30 дней',value:30},{title:'90 дней',value:90},{title:'180 дней',value:180}];
 const kinds=[{title:'Расход',value:'expense'},{title:'Доход',value:'income'},{title:'Перевод',value:'transfer'}];
@@ -123,10 +125,12 @@ watch(selectedAccount,()=>{page.value=1;});
 <style scoped>
 .planning-workspace{max-width:1280px;width:100%;padding:32px;margin:0 auto}.planning-heading,.section-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:24px}.planning-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.planning-card{background:rgb(var(--ebk-surface));border:1px solid rgba(var(--ebk-border),.12)}.planning-empty{padding:60px 20px;text-align:center}.forecast-controls{display:grid;grid-template-columns:180px 200px minmax(200px,1fr);gap:20px;align-items:center}.amount{white-space:nowrap;font-variant-numeric:tabular-nums}.forecast-chart svg{width:100%;height:200px}.v-table td{border-bottom-color:rgba(var(--v-border-color),var(--v-border-opacity))} @media(max-width:900px){.planning-heading,.section-heading{align-items:flex-start;flex-direction:column}.planning-workspace{padding:20px}.planning-overview{grid-template-columns:1fr}.forecast-controls{grid-template-columns:1fr}.planning-heading h1{font-size:1.6rem!important}}
 
+.planning-overview .amount{white-space:normal;overflow-wrap:anywhere;font-size:clamp(1.25rem,2.2vw,2rem)}
 .planning-dialog-form.v-card-text{display:grid;align-content:start;gap:20px;padding:12px 24px 24px;min-height:0}
 .planning-form-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
 .planning-form-cell{min-width:0}
 .planning-dialog-extra{display:grid;align-content:start;gap:20px;padding-top:8px}
 .planning-dialog-form :deep(.v-input){margin:0}
-@media(max-width:600px){.planning-form-row{grid-template-columns:1fr}.planning-dialog-form.v-card-text{padding-inline:20px}}
+@media(max-width:600px){.planning-form-row{grid-template-columns:1fr}.planning-overview .amount{white-space:normal;overflow-wrap:anywhere;font-size:clamp(1.25rem,2.2vw,2rem)}
+.planning-dialog-form.v-card-text{padding-inline:20px}}
 </style>

@@ -98,10 +98,10 @@ func TestPartialHorizonReservesPlansBeyondHorizon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Budgets[0].Committed != 5000 || r.Budgets[0].Estimated != 2000 {
+	if r.Budgets[0].Committed != 5000 || r.Budgets[0].Estimated != 0 {
 		t.Fatalf("%+v", r.Budgets)
 	}
-	if final(r, "a") != 18000 {
+	if final(r, "a") != 20000 {
 		t.Fatal(final(r, "a"))
 	}
 }
@@ -143,7 +143,7 @@ func TestMonthlyClampsDayAndSkipsPaidOccurrences(t *testing.T) {
 		t.Fatal(r.Events)
 	}
 }
-func TestCalendarDSTAndExactCentDistribution(t *testing.T) {
+func TestCalendarDSTAndExactMonthEndResidual(t *testing.T) {
 	loc, _ := time.LoadLocation("Europe/Berlin")
 	now := time.Date(2026, 3, 29, 0, 0, 0, 0, loc)
 	end := time.Date(2026, 3, 31, 0, 0, 0, 0, loc)
@@ -154,10 +154,8 @@ func TestCalendarDSTAndExactCentDistribution(t *testing.T) {
 	if len(r.Points) != 3 || final(r, "a") != 95 {
 		t.Fatal(r.Points)
 	}
-	for n, want := range []int64{-2, -2, -1} {
-		if r.Events[n].Amount != want {
-			t.Fatal(r.Events)
-		}
+	if len(r.Events) != 1 || r.Events[0].Amount != -5 || r.Events[0].Date != "2026-03-31" {
+		t.Fatal(r.Events)
 	}
 }
 func TestLimitWithoutEstimateDoesNotInventSpending(t *testing.T) {
@@ -229,5 +227,71 @@ func TestForecastEventsExposeKindForExplorer(t *testing.T) {
 	}
 	if kinds["income"] != 1 || kinds["transfer"] != 2 || kinds["expense"] < 2 {
 		t.Fatal(kinds)
+	}
+}
+
+func TestResidualOnlyAtLocalMonthEndAndOptIn(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2028, 2, 10, 10, 0, 0, 0, loc)
+	payment := item("payment", "expense", "2028-02-20", 200)
+	payment.BudgetID = "food"
+	for _, estimate := range []bool{false, true} {
+		p := Plan{Budgets: []Budget{budget(1000, estimate)}, Items: []Item{payment}}
+		for _, end := range []string{"2028-02-28", "2028-02-29", "2028-03-31"} {
+			through, _ := time.ParseInLocation("2006-01-02", end, loc)
+			r, err := Preview(p, account(10000), nil, now, through, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			estimates := 0
+			for _, e := range r.Events {
+				if e.Source == "planned" && (e.Date != "2028-02-20" || e.Amount != -200) {
+					t.Fatalf("payment moved: %+v", e)
+				}
+				if e.Source != "estimate" {
+					continue
+				}
+				estimates++
+				expected := int64(-1000)
+				if e.Date == "2028-02-29" {
+					expected = -800
+				}
+				if e.Amount != expected || e.at.Hour() != 23 || e.at.Minute() != 59 || e.at.Add(time.Nanosecond).Day() != 1 {
+					t.Fatalf("not a local month-end residual: %+v", e)
+				}
+			}
+			want := 0
+			if estimate && end >= "2028-02-29" {
+				want++
+			}
+			if estimate && end >= "2028-03-31" {
+				want++
+			}
+			if estimates != want {
+				t.Fatalf("estimate=%v through=%s: got %d residuals, want %d", estimate, end, estimates, want)
+			}
+			for _, point := range r.Points {
+				if point.Date == "2028-02-19" && point.Balance != 10000 {
+					t.Fatalf("budget spent before its date: %+v", point)
+				}
+				if point.Date == "2028-02-28" && point.Balance != 9800 {
+					t.Fatalf("residual spent before month end: %+v", point)
+				}
+			}
+		}
+	}
+}
+func TestOverspentBudgetHasNoResidual(t *testing.T) {
+	p := Plan{Budgets: []Budget{budget(100, true)}}
+	tx := []Transaction{{ID: "paid", AccountID: "a", CategoryID: "cat", Kind: 3, Amount: 150, Time: tm("2026-11-02T10:00:00Z")}}
+	r, err := Preview(p, account(1000), tx, tm("2026-11-03T10:00:00Z"), tm("2026-11-30T00:00:00Z"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Events) != 0 || r.Budgets[0].Estimated != 0 || r.Budgets[0].Remaining != -50 {
+		t.Fatalf("%+v", r)
 	}
 }

@@ -19,6 +19,8 @@ export interface ExplorerSeries {
     name: string;
     source: string;
     currency: string;
+    flow: string;
+    budgets: { id: string; name: string; total: string }[];
     daily: (string | null)[];
     values: (string | null)[];
 }
@@ -68,6 +70,7 @@ export function buildExplorerComparison(args: {
     for (const q of queries.filter(q => q.source !== 'difference')) {
         const budgets = selectedBudget(q, plan), bids = new Set(budgets.map(b => b.id));
         const amounts = new Map<string, Map<string, Decimal>>();
+        const budgetAmounts = new Map<string, Decimal>();
         const add = (currency: string, date: string, amount: Decimal.Value) => {
             if (date < start || date > end) return;
             let byDay = amounts.get(currency);
@@ -83,8 +86,12 @@ export function buildExplorerComparison(args: {
             for (const f of facts[q.id] || []) {
                 if (f.time > now || !factSelected(f))
                     continue;
-                if (f.kind === 3 && q.flow !== 'income' && accountSelected(f.accountId))
+                if (f.kind === 3 && q.flow !== 'income' && accountSelected(f.accountId)) {
                     add(f.currency, f.date, q.flow === 'net' ? new Decimal(f.amount).neg() : f.amount);
+                    if (f.date >= start && f.date <= end) for (const b of budgets.filter(b => b.accountId === f.accountId && b.categoryIds.some(id => f.categoryIds.includes(id)))) {
+                        budgetAmounts.set(b.id, (budgetAmounts.get(b.id) || new Decimal(0)).add(f.amount));
+                    }
+                }
                 if (f.kind === 2 && q.flow !== 'expense' && accountSelected(f.accountId))
                     add(f.currency, f.date, f.amount);
                 if (f.kind === 4 && q.flow === 'net' && !q.budgetIds.length) {
@@ -102,8 +109,11 @@ export function buildExplorerComparison(args: {
                 const account = accounts[b.accountId];
                 if (!account)
                     throw new Error('Счёт бюджета недоступен.');
-                for (const date of dates)
-                    add(account.currency, date, budgetDayAmount(b.limit, date));
+                for (const date of dates) {
+                    const amount = budgetDayAmount(b.limit, date);
+                    add(account.currency, date, amount);
+                    budgetAmounts.set(b.id, (budgetAmounts.get(b.id) || new Decimal(0)).add(amount));
+                }
             }
         }
         else {
@@ -159,7 +169,7 @@ export function buildExplorerComparison(args: {
                 amounts.set(accounts[id]!.currency, new Map());
         }
         for (const b of budgets) {
-            if (q.budgetIds.length || q.source === 'budget') {
+            if (q.budgetIds.length || q.source === 'budget' || q.source === 'actual' && q.flow === 'expense') {
                 const currency = accounts[b.accountId]?.currency;
                 if (currency && !amounts.has(currency))
                     amounts.set(currency, new Map());
@@ -174,7 +184,7 @@ export function buildExplorerComparison(args: {
             const daily = dates.map(d => q.source === 'actual' && d > today ? null : (byDay.get(d) || new Decimal(0)).toFixed(0));
             const values = daily.map(value => { if (value === null)
                 return null; sum = sum.add(value); return cumulative ? sum.toFixed(0) : value; });
-            series.push({ id: q.id, name: q.name || 'Без названия', source: q.source, currency, daily, values });
+            series.push({ id: q.id, name: q.name || 'Без названия', source: q.source, flow: q.source === 'budget' ? 'expense' : q.flow, currency, daily, values, budgets: (q.source === 'budget' || q.source === 'actual' && q.flow === 'expense') ? budgets.filter(b => accounts[b.accountId]?.currency === currency).map(b => ({id: b.id, name: b.name, total: (budgetAmounts.get(b.id) || new Decimal(0)).toFixed(0)})) : [] });
         }
     }
     for (const q of queries.filter(q => q.source === 'difference')) {
@@ -187,7 +197,7 @@ export function buildExplorerComparison(args: {
             if (!a || !b)
                 continue;
             const subtract = (x: (string | null)[], y: (string | null)[]) => x.map((v, i) => v === null || y[i] === null ? null : new Decimal(v).sub(y[i] || 0).toFixed(0));
-            series.push({ id: q.id, name: q.name || 'Разница', source: q.source, currency, daily: subtract(a.daily, b.daily), values: subtract(a.values, b.values) });
+            series.push({ id: q.id, name: q.name || 'Разница', source: q.source, flow: q.flow, budgets: [], currency, daily: subtract(a.daily, b.daily), values: subtract(a.values, b.values) });
         }
     }
     return { dates, currencies: Array.from(new Set(series.map(s => s.currency))).sort(), series };

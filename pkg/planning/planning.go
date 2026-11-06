@@ -341,29 +341,12 @@ func Preview(p Plan, accounts []Account, transactions []Transaction, now, throug
 				remaining = 0
 			}
 			if b.Estimate && remaining > 0 {
-				// Use all remaining days of the month, even if only part is displayed.
-				first := cursor
-				if first.Before(today) {
-					first = today
-				}
-				last := cursor.AddDate(0, 1, 0)
-				days := 0
-				for d := first; d.Before(last); d = d.AddDate(0, 0, 1) {
-					days++
-				}
-				base, extra := remaining/int64(days), remaining%int64(days)
-				index := int64(0)
-				for d := first; d.Before(last) && d.Before(end); d = d.AddDate(0, 0, 1) {
-					amount := base
-					if index < extra {
-						amount++
-					}
-					index++
-					at := time.Date(d.Year(), d.Month(), d.Day(), 23, 59, 59, 0, loc)
-					if amount > 0 && at.After(now) {
-						r.Events = append(r.Events, Event{Kind: "expense", ID: b.ID + "/estimate/" + day(d), Name: b.Name, Date: day(d), AccountID: b.AccountID, BudgetID: b.ID, Amount: -amount, Source: "estimate", at: at})
-						estimated[key] += amount
-					}
+				// The optional residual is one month-end expense, after dated payments.
+				// A horizon ending earlier must not pull this expense forward.
+				at := cursor.AddDate(0, 1, 0).Add(-time.Nanosecond)
+				if at.After(now) && at.Before(end) {
+					r.Events = append(r.Events, Event{Kind: "expense", ID: b.ID + "/estimate/" + day(at), Name: b.Name, Date: day(at), AccountID: b.AccountID, BudgetID: b.ID, Amount: -remaining, Source: "estimate", at: at})
+					estimated[key] += remaining
 				}
 			}
 		}

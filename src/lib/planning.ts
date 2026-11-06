@@ -49,3 +49,31 @@ export function parseFinancialPlan(source: string, revision: number): FinancialP
     }
     return {revision, budgets:value.budgets, items:value.items};
 }
+
+export interface MonthlyBudgetTotal {
+    currency: string;
+    limit: string;
+    spent: string | null;
+    committed: string | null;
+    remaining: string | null;
+}
+
+/** Keep totals exact and currencies separate; draft plans have no actual report yet. */
+export function monthlyBudgetTotals(budgets: PlanningBudget[], accounts: PlanningAccount[], reports?: BudgetReport[]): MonthlyBudgetTotal[] {
+    const groups = new Map<string, MonthlyBudgetTotal>();
+    const currencies = new Map(accounts.map(account => [account.id, account.currency]));
+    for (const budget of budgets) {
+        const currency = currencies.get(budget.accountId) || '';
+        let total = groups.get(currency);
+        if (!total) {
+            total = { currency, limit: '0', spent: '0', committed: '0', remaining: '0' };
+            groups.set(currency, total);
+        }
+        total.limit = new Decimal(total.limit).add(budget.limit).toFixed(0);
+        const report = reports?.find(report => report.id === budget.id && report.currency === currency);
+        for (const field of ['spent', 'committed', 'remaining'] as const) {
+            total[field] = total[field] === null || !report ? null : new Decimal(total[field]).add(report[field]).toFixed(0);
+        }
+    }
+    return [...groups.values()].sort((a, b) => a.currency.localeCompare(b.currency));
+}

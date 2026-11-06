@@ -1,16 +1,18 @@
 <template>
     <v-card-text class="comparison-panel">
         <div class="comparison-toolbar">
-            <v-select label="Представление" :items="[{id:true,name:'Накопительно'},{id:false,name:'По дням'}]" item-title="name" item-value="id" v-model="exploration.comparisonCumulative" hide-details />
-            <v-select v-if="mode === 'chart'" label="График" :items="[{id:'line',name:'Линии'},{id:'bar',name:'Столбцы'}]" item-title="name" item-value="id" v-model="exploration.comparisonChart" hide-details />
+            <v-select v-if="mode === 'table' || ['line', 'bar', 'custom'].includes(exploration.comparisonChart)" label="Представление" :items="[{id:true,name:'Накопительно'},{id:false,name:'По дням'}]" item-title="name" item-value="id" v-model="exploration.comparisonCumulative" hide-details />
+            <v-select v-if="mode === 'chart'" label="График" :items="[{id:'line',name:'Линии'},{id:'bar',name:'Столбцы'},{id:'radar',name:'Бюджет / факт · радар'},{id:'custom',name:'Редактор кода'}]" item-title="name" item-value="id" v-model="exploration.comparisonChart" hide-details />
+            <v-select v-if="mode === 'chart' && exploration.comparisonChart === 'custom'" label="Вид редактора" :items="layouts" item-title="name" item-value="type" v-model="exploration.customChartDisplayLayout" hide-details />
             <v-select label="Валюта" :items="comparison?.currencies || []" :model-value="currency" @update:model-value="exploration.comparisonCurrency = $event" hide-details />
             <v-btn variant="outlined" :disabled="busy || !!error || !visibleSeries.length" @click="downloadCSV">Скачать CSV</v-btn>
             <v-btn variant="text" :loading="busy" :disabled="loading" @click="load">Обновить расчёт</v-btn>
+            <v-btn v-if="mode === 'chart' && exploration.comparisonChart === 'radar'" variant="text" @click="editRadar">Редактировать код диаграммы</v-btn>
         </div>
         <v-alert v-if="error" type="error" variant="tonal" class="mt-4">{{ error }}</v-alert>
         <v-progress-linear v-if="busy || loading" indeterminate class="mt-4" />
         <template v-else-if="comparison && !error">
-            <p class="text-medium-emphasis text-body-small my-4">Один период и календарь приложения · валюты сравниваются отдельно · фактические расходы показаны до текущего момента. Бюджет — равномерный план, прогноз — сценарий. Данные расчёта не создают транзакций.</p>
+            <p class="text-medium-emphasis text-body-small my-4">Один период и календарь приложения · валюты сравниваются отдельно · фактические расходы показаны до текущего момента. Линия бюджета — ориентир по месячному лимиту. Прогноз использует даты доходов и платежей; включённый остаток бюджета учитывается в конце месяца. Данные расчёта не создают транзакций.</p>
             <div class="comparison-totals">
                 <div v-for="series in visibleSeries" :key="series.id" class="comparison-total">
                     <span class="text-body-small text-medium-emphasis">{{ sourceName(series.source) }} · {{ series.name }}</span>
@@ -18,7 +20,14 @@
                     <span class="text-body-small text-medium-emphasis">{{ series.source === 'actual' || series.source === 'difference' ? 'По последней доступной дате' : 'За выбранный период' }}</span>
                 </div>
             </div>
-            <v-chart v-if="mode === 'chart' && visibleSeries.length" class="comparison-chart mt-4" autoresize :option="chartOptions" :update-options="{notMerge:true}" />
+            <template v-if="mode === 'chart' && ['radar', 'custom'].includes(exploration.comparisonChart)">
+                <p class="text-body-small text-medium-emphasis my-4">Радар: оси — бюджеты, пунктир — план, сплошная линия — факт до текущего момента. Все оси имеют общую денежную шкалу. Для полного месячного лимита выберите весь месяц; в частичном периоде показана доля лимита.</p>
+                <custom-chart :key="exploration.comparisonChart" :disabled="busy || loading" :transactions="[]" :queries="exploration.queries"
+                              :comparison="customComparison" :display-layout="exploration.comparisonChart === 'radar' ? TransactionExplorerCustomChartDisplayLayout.Chart.type : exploration.customChartDisplayLayout"
+                              :model-value="exploration.comparisonChart === 'radar' ? budgetRadarScript : exploration.customChartScript || budgetRadarScript"
+                              @update:model-value="updateScript" />
+            </template>
+            <v-chart v-else-if="mode === 'chart' && visibleSeries.length" class="comparison-chart mt-4" autoresize :option="chartOptions" :update-options="{notMerge:true}" />
             <v-table v-if="mode === 'table'" fixed-header height="620" class="mt-4 comparison-table">
                 <thead><tr><th>Дата</th><th v-for="series in visibleSeries" :key="series.id">{{ series.name }}<small>{{ sourceName(series.source) }} · {{ currency }}</small></th></tr></thead>
                 <tbody><tr v-for="(date,index) in comparison.dates" :key="date"><td>{{ date }}</td><td v-for="series in visibleSeries" :key="series.id">{{ series.values[index] === null ? '—' : formatPlanningMoney(series.values[index] || '0', currency) }}</td></tr></tbody>
@@ -29,6 +38,9 @@
     </v-card-text>
 </template>
 <script setup lang="ts">
+import CustomChart from '@/components/desktop/CustomChart.vue';
+import { budgetRadarScript } from '@/lib/explorer_budget_radar.ts';
+import { TransactionExplorerCustomChartDisplayLayout } from '@/core/explorer.ts';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useTheme } from 'vuetify';
 import Decimal from 'decimal.js';
@@ -61,6 +73,10 @@ const error=computed(()=>loadError.value||calculated.value.error);
 const comparison=computed(()=>calculated.value.data);
 const currency=computed(()=>comparison.value?.currencies.includes(exploration.value.comparisonCurrency)?exploration.value.comparisonCurrency:comparison.value?.currencies.includes(user.currentUserDefaultCurrency)?user.currentUserDefaultCurrency:comparison.value?.currencies[0]||'');
 const visibleSeries=computed(()=>comparison.value?.series.filter(s=>s.currency===currency.value)||[]);
+const layouts=TransactionExplorerCustomChartDisplayLayout.values().map(layout=>({type:layout.type,name:({0:'Код и график',1:'Код и данные графика',2:'График',3:'Код'} as Record<number,string>)[layout.type]}));
+const customComparison=computed(()=>comparison.value ? {...comparison.value,currency:currency.value} : undefined);
+function editRadar(){exploration.value.customChartScript=budgetRadarScript;exploration.value.customChartDisplayLayout=TransactionExplorerCustomChartDisplayLayout.CodeAndChart.type;exploration.value.comparisonChart='custom';}
+function updateScript(script:string){if(exploration.value.comparisonChart==='custom')exploration.value.customChartScript=script;}
 const sourceName=(source:string)=>({actual:'Факт',budget:'Бюджет',forecast:'Прогноз',difference:'Разница'}[source]||source);
 function total(series:ExplorerSeries):string {return series.daily.reduce<Decimal>((a,v)=>v===null?a:a.add(v),new Decimal(0)).toFixed(0);}
 async function load(){
@@ -83,7 +99,7 @@ const chartOptions=computed<EChartsOption>(()=>{
     const dates=comparison.value?.dates||[];
     const forecastAnchor=Math.max(0,dates.findIndex(d=>d>=today.value)-1);
     const hasFuture=dates.some(d=>d>=today.value);
-    const options:EChartsOption={color:['#60a5fa','#d8a45e','#45bfa9','#e47d88','#ad8cec','#dfb652'],textStyle:{color:text},tooltip:{trigger:'axis',renderMode:'richText',valueFormatter:value=>value===null||value===undefined||!Number.isFinite(Number(value))?'—':formatPlanningMoney(new Decimal(String(value)).mul(100).toFixed(0),currency.value)},legend:{type:'scroll',bottom:0,textStyle:{color:text}},grid:{left:16,right:24,top:36,bottom:92,containLabel:true},xAxis:{type:'category',data:comparison.value?.dates||[],boundaryGap:exploration.value.comparisonChart==='bar',axisLabel:{color:text}},yAxis:{type:'value',name:currency.value,axisLabel:{color:text},splitLine:{lineStyle:{color:theme.global.name.value==='dark'?'#ffffff16':'#00000016'}}},dataZoom:[{type:'inside'},{type:'slider',bottom:32,height:18}],series:visibleSeries.value.map((s,index)=>({id:s.id,name:s.name,type:exploration.value.comparisonChart,showSymbol:dates.length===1,connectNulls:false,data:s.values.map((v,i)=>v===null||(s.source==='forecast'&&hasFuture&&i<forecastAnchor)?null:new Decimal(v).div(100).toNumber()),lineStyle:{width:s.source==='forecast'?3:2,type:s.source==='budget'?'dashed':s.source==='difference'?'dotted':'solid'},...(index===0?{markLine:{symbol:'none',silent:true,label:{formatter:'Сегодня'},lineStyle:{color:text,type:'dashed'},data:[{xAxis:today.value}]}}:{})}))};
+    const options:EChartsOption={color:['#60a5fa','#d8a45e','#45bfa9','#e47d88','#ad8cec','#dfb652'],textStyle:{color:text},tooltip:{trigger:'axis',renderMode:'richText',valueFormatter:value=>value===null||value===undefined||!Number.isFinite(Number(value))?'—':formatPlanningMoney(new Decimal(String(value)).mul(100).toFixed(0),currency.value)},legend:{type:'scroll',bottom:0,textStyle:{color:text}},grid:{left:16,right:24,top:36,bottom:92,containLabel:true},xAxis:{type:'category',data:comparison.value?.dates||[],boundaryGap:exploration.value.comparisonChart==='bar',axisLabel:{color:text}},yAxis:{type:'value',name:currency.value,axisLabel:{color:text},splitLine:{lineStyle:{color:theme.global.name.value==='dark'?'#ffffff16':'#00000016'}}},dataZoom:[{type:'inside'},{type:'slider',bottom:32,height:18}],series:visibleSeries.value.map((s,index)=>({id:s.id,name:s.name,type:exploration.value.comparisonChart==='bar'?'bar':'line',showSymbol:dates.length===1,connectNulls:false,data:s.values.map((v,i)=>v===null||(s.source==='forecast'&&hasFuture&&i<forecastAnchor)?null:new Decimal(v).div(100).toNumber()),lineStyle:{width:s.source==='forecast'?3:2,type:s.source==='budget'?'dashed':s.source==='difference'?'dotted':'solid'},...(index===0?{markLine:{symbol:'none',silent:true,label:{formatter:'Сегодня'},lineStyle:{color:text,type:'dashed'},data:[{xAxis:today.value}]}}:{})}))};
     return options;
 });
 function downloadCSV(){
