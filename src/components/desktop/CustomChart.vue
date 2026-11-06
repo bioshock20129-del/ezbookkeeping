@@ -109,7 +109,7 @@ type SnackBarType = InstanceType<typeof SnackBar>;
 type SandboxRequest = {
     source: string;
     transactions: CustomChartTransaction[];
-    comparison?: ExplorerComparison & { currency: string };
+    comparison?: Omit<ExplorerComparison, 'evidence'> & { currency: string };
     code: string;
 };
 
@@ -162,7 +162,7 @@ const props = defineProps<{
     transactions: TransactionInsightDataItemWithQueryIndexes[];
     queries: TransactionExplorerQuery[];
     modelValue: string;
-    comparison?: ExplorerComparison & { currency: string };
+    comparison?: Omit<ExplorerComparison, 'evidence'> & { currency: string };
 }>();
 
 const emit = defineEmits<{

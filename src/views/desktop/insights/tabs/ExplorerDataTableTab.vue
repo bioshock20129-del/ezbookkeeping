@@ -1,5 +1,5 @@
 <template>
-    <explorer-comparison v-if="hasComparisonSources" mode="table" :loading="loading" />
+    <explorer-comparison v-if="hasComparisonSources" mode="table" :loading="loading" @click:transaction="emit('click:transaction',$event)" />
     <template v-else>
     <v-card-text class="px-4 py-0 mb-4">
         <v-row>

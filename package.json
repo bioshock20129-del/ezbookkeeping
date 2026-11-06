@@ -20,7 +20,8 @@
     "test:frontend-startup": "node scripts/check-frontend-startup.mjs",
     "test:planning-ui": "node scripts/check-planning-ui.mjs",
     "test:explorer-comparison": "node scripts/check-explorer-comparison.mjs",
-    "test:budget-monthly": "node scripts/check-budget-monthly.mjs"
+    "test:budget-monthly": "node scripts/check-budget-monthly.mjs",
+    "test:explorer-evidence": "node scripts/check-explorer-evidence.mjs"
   },
   "dependencies": {
     "@mdi/js": "7.4.47",
