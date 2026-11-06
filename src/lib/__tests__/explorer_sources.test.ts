@@ -53,5 +53,19 @@ describe('Explorer query sources',()=>{
         const explorer=InsightsExplorer.createNewExplorer('q');explorer.queries=[query];explorer.comparisonCumulative=false;explorer.comparisonChart='bar';explorer.comparisonCurrency='RUB';
         const parsed=InsightsExplorer.of({id:'x',name:'test',displayOrder:0,hidden:false,data:explorer.data});
         expect(parsed.data).toEqual(explorer.data);
+        for (const chart of ['radar','custom'] as const) { explorer.comparisonChart=chart; expect(InsightsExplorer.of({id:'x',name:'test',displayOrder:0,hidden:false,data:explorer.data}).comparisonChart).toBe(chart); }
     });
+});
+
+
+it('exposes exact per-budget breakdown with query filters, dates and currencies',()=>{
+    const mixed={...plan,budgets:[...plan.budgets,{...plan.budgets[0]!,id:'rent',name:'Жильё',categoryIds:['rent'],limit:'999999999999999'},{...plan.budgets[0]!,id:'usd',name:'USD',accountId:'b',categoryIds:['usd'],limit:'100'}]};
+    const actual=q('a','actual'),budget=q('b','budget');actual.budgetIds=[];budget.budgetIds=[];
+    const result=buildExplorerComparison({...input,plan:mixed,queries:[actual,budget],facts:{a:[fact('2026-11-01','373'),fact('2026-11-02','999999999999999',{categoryIds:['rent']}),fact('2026-11-21','999999999'),fact('2026-10-31','1000'),fact('2026-11-03','200',{categoryIds:['outside']}),fact('2026-11-01','10',{kind:2})]}});
+    expect(result.series.find(s=>s.id==='a'&&s.currency==='RUB')!.budgets).toEqual([{id:'food',name:'Еда',total:'373'},{id:'rent',name:'Жильё',total:'999999999999999'}]);
+    expect(result.series.find(s=>s.id==='b'&&s.currency==='RUB')!.budgets[1]!.total).toBe('999999999999999');
+    expect(result.series.find(s=>s.id==='a'&&s.currency==='USD')!.budgets[0]!.total).toBe('0');
+    actual.budgetIds=['food'];
+    const filtered=buildExplorerComparison({...input,plan:mixed,queries:[actual],facts:{a:[fact('2026-11-01','373')]}});
+    expect(filtered.series[0]!.budgets).toEqual([{id:'food',name:'Еда',total:'373'}]);
 });

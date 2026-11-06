@@ -95,6 +95,7 @@ import { parseBigDecimal } from '@/lib/numeral.ts';
 import { parseDateTimeFromUnixTimeWithTimezoneOffset } from '@/lib/datetime.ts';
 import { generateRandomUUID } from '@/lib/misc.ts';
 import logger from '@/lib/logger.ts';
+import type { ExplorerComparison } from '@/lib/explorer_sources.ts';
 
 import {
     mdiPlay,
@@ -108,6 +109,7 @@ type SnackBarType = InstanceType<typeof SnackBar>;
 type SandboxRequest = {
     source: string;
     transactions: CustomChartTransaction[];
+    comparison?: Omit<ExplorerComparison, 'evidence'> & { currency: string };
     code: string;
 };
 
@@ -160,6 +162,7 @@ const props = defineProps<{
     transactions: TransactionInsightDataItemWithQueryIndexes[];
     queries: TransactionExplorerQuery[];
     modelValue: string;
+    comparison?: Omit<ExplorerComparison, 'evidence'> & { currency: string };
 }>();
 
 const emit = defineEmits<{
@@ -203,7 +206,7 @@ window.addEventListener('message', function (event) {
         eval(data.code);
 
         if (window.buildChartOptions) {
-            const result = window.buildChartOptions(transactions);
+            const result = window.buildChartOptions(transactions, data.comparison);
             window.parent.postMessage({ result: JSON.stringify(result) }, '*');
         } else {
             window.parent.postMessage({ knownError: 'No buildChartOptions function defined' }, '*');
@@ -233,6 +236,22 @@ const displayLayout = computed<TransactionExplorerCustomChartDisplayLayout>(() =
 const customChartEditorExtraLibs = computed<CodeEditorExtraLib[]>(() => [{
     filePath: 'inmemory://model/ezbookkeeping-custom-chart.d.ts',
     content: `
+/** Optional second argument of buildChartOptions(transactions, comparison).
+ * Available for budget/forecast query comparisons. All amounts are exact minor-unit strings.
+ * Daily budget reference is prorated over calendar days; select a whole month for its full limit.
+ */
+interface CustomChartComparison {
+    currency: string;
+    dates: string[];
+    currencies: string[];
+    series: {
+        id: string; name: string; source: 'actual' | 'budget' | 'forecast' | 'difference';
+        flow: string; currency: string;
+        daily: (string | null)[]; values: (string | null)[];
+        /** Budget breakdown of expense actual/budget queries, with the same period and filters. */
+        budgets: { id: string; name: string; total: string }[];
+    }[];
+}
 /** ${tt('sample.insightsExplorerCustomChart.customChartTransactionDescription')} */
 interface CustomChartTransaction {
     /** ${tt('sample.insightsExplorerCustomChart.transactionField.id')} */
@@ -622,6 +641,7 @@ function executeCustomScript(): void {
     const sandboxRequest: SandboxRequest = {
         source: sandboxMessageSignature,
         transactions: customChartTransactions.value || [],
+        comparison: props.comparison,
         code: customScript.value + `\n\n;if (typeof buildChartOptions !== 'undefined') { window.buildChartOptions = buildChartOptions; }`
     };
 
@@ -741,6 +761,10 @@ watch(() => props.displayLayout, (newValue, oldValue) => {
         && !(TransactionExplorerCustomChartDisplayLayout.valueOf(oldValue)?.showChart || TransactionExplorerCustomChartDisplayLayout.valueOf(oldValue)?.showChartData)) {
         reloadSandbox(true);
     }
+});
+
+watch(() => props.comparison, () => {
+    reloadSandbox(true);
 });
 
 watch(customChartTransactions, () => {

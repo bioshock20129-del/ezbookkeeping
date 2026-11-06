@@ -13,12 +13,39 @@ export interface ExplorerFact {
     amount: string;
     destinationAmount: string;
     categoryIds: string[];
+    categoryName?: string;
+    accountName?: string;
+    destinationAccountName?: string;
+    comment?: string;
+    hideAmount?: boolean;
+}
+/** One recorded transaction's signed contribution on a selected account. */
+export interface ExplorerContribution {
+    transactionId: string;
+    date: string;
+    time: number;
+    kind: number;
+    accountId: string;
+    accountName: string;
+    categoryId: string;
+    categoryName: string;
+    comment: string;
+    hideAmount: boolean;
+    amount: string;
+    budgetIds: string[];
+}
+export interface ExplorerEvidence {
+    queryId: string;
+    currency: string;
+    transactions: ExplorerContribution[];
 }
 export interface ExplorerSeries {
     id: string;
     name: string;
     source: string;
     currency: string;
+    flow: string;
+    budgets: { id: string; name: string; total: string }[];
     daily: (string | null)[];
     values: (string | null)[];
 }
@@ -26,6 +53,7 @@ export interface ExplorerComparison {
     dates: string[];
     currencies: string[];
     series: ExplorerSeries[];
+    evidence: ExplorerEvidence[];
 }
 const dayMS = 86400000;
 export function calendarDays(start: string, end: string): string[] {
@@ -64,10 +92,12 @@ export function buildExplorerComparison(args: {
     const { queries, facts, plan, accounts, forecasts, start, end, today, now, cumulative } = args;
     if (queries.length > 50 || new Set(queries.map(q => q.id)).size !== queries.length)
         throw new Error('До 50 запросов с уникальными ID.');
-    const dates = calendarDays(start, end), series: ExplorerSeries[] = [];
+    const dates = calendarDays(start, end), series: ExplorerSeries[] = [], evidence: ExplorerEvidence[] = [];
     for (const q of queries.filter(q => q.source !== 'difference')) {
         const budgets = selectedBudget(q, plan), bids = new Set(budgets.map(b => b.id));
         const amounts = new Map<string, Map<string, Decimal>>();
+        const budgetAmounts = new Map<string, Decimal>();
+        const contributions = new Map<string, ExplorerContribution[]>();
         const add = (currency: string, date: string, amount: Decimal.Value) => {
             if (date < start || date > end) return;
             let byDay = amounts.get(currency);
@@ -79,19 +109,37 @@ export function buildExplorerComparison(args: {
         };
         const accountSelected = (id: string) => !q.accountIds.length || q.accountIds.includes(id);
         const factSelected = (f: ExplorerFact) => !q.budgetIds.length || budgets.some(b => b.accountId === f.accountId && b.categoryIds.some(id => f.categoryIds.includes(id)));
+        // Ledger details and amounts enter through the same date/account/budget checks.
+        const addFact = (f: ExplorerFact, currency: string, amount: Decimal.Value, accountId: string) => {
+            if (f.date < start || f.date > end) return;
+            add(currency, f.date, amount);
+            const matchedBudgets = f.kind === 3 ? budgets.filter(b => b.accountId === accountId && b.categoryIds.some(id => f.categoryIds.includes(id))) : [];
+            if (f.kind === 3) for (const b of matchedBudgets) {
+                budgetAmounts.set(b.id, (budgetAmounts.get(b.id) || new Decimal(0)).add(f.amount));
+            }
+            if (q.source !== 'actual') return;
+            let transactions = contributions.get(currency);
+            if (!transactions) {
+                transactions = [];
+                contributions.set(currency, transactions);
+            }
+            transactions.push({transactionId:f.id, date:f.date, time:f.time, kind:f.kind, accountId,
+                accountName:(accountId === f.accountId ? f.accountName : f.destinationAccountName) || accountId,
+                categoryId:f.categoryIds.at(-1) || '', categoryName:f.categoryName || 'Без категории', comment:f.comment || '', hideAmount:!!f.hideAmount,
+                amount:new Decimal(amount).toFixed(0), budgetIds:matchedBudgets.map(b => b.id)});
+        };
         const addFacts = () => {
             for (const f of facts[q.id] || []) {
-                if (f.time > now || !factSelected(f))
-                    continue;
+                if (f.time > now || !factSelected(f)) continue;
                 if (f.kind === 3 && q.flow !== 'income' && accountSelected(f.accountId))
-                    add(f.currency, f.date, q.flow === 'net' ? new Decimal(f.amount).neg() : f.amount);
+                    addFact(f, f.currency, q.flow === 'net' ? new Decimal(f.amount).neg() : f.amount, f.accountId);
                 if (f.kind === 2 && q.flow !== 'expense' && accountSelected(f.accountId))
-                    add(f.currency, f.date, f.amount);
+                    addFact(f, f.currency, f.amount, f.accountId);
                 if (f.kind === 4 && q.flow === 'net' && !q.budgetIds.length) {
                     if (accountSelected(f.accountId))
-                        add(f.currency, f.date, new Decimal(f.amount).neg());
+                        addFact(f, f.currency, new Decimal(f.amount).neg(), f.accountId);
                     if (accountSelected(f.destinationId))
-                        add(f.destinationCurrency, f.date, f.destinationAmount);
+                        addFact(f, f.destinationCurrency, f.destinationAmount, f.destinationId);
                 }
             }
         };
@@ -102,8 +150,11 @@ export function buildExplorerComparison(args: {
                 const account = accounts[b.accountId];
                 if (!account)
                     throw new Error('Счёт бюджета недоступен.');
-                for (const date of dates)
-                    add(account.currency, date, budgetDayAmount(b.limit, date));
+                for (const date of dates) {
+                    const amount = budgetDayAmount(b.limit, date);
+                    add(account.currency, date, amount);
+                    budgetAmounts.set(b.id, (budgetAmounts.get(b.id) || new Decimal(0)).add(amount));
+                }
             }
         }
         else {
@@ -159,7 +210,7 @@ export function buildExplorerComparison(args: {
                 amounts.set(accounts[id]!.currency, new Map());
         }
         for (const b of budgets) {
-            if (q.budgetIds.length || q.source === 'budget') {
+            if (q.budgetIds.length || q.source === 'budget' || q.source === 'actual' && q.flow === 'expense') {
                 const currency = accounts[b.accountId]?.currency;
                 if (currency && !amounts.has(currency))
                     amounts.set(currency, new Map());
@@ -170,11 +221,12 @@ export function buildExplorerComparison(args: {
                 if (!amounts.has(account.currency))
                     amounts.set(account.currency, new Map());
         for (const [currency, byDay] of amounts) {
+            if (q.source === 'actual') evidence.push({queryId:q.id, currency, transactions:contributions.get(currency) || []});
             let sum = new Decimal(0);
             const daily = dates.map(d => q.source === 'actual' && d > today ? null : (byDay.get(d) || new Decimal(0)).toFixed(0));
             const values = daily.map(value => { if (value === null)
                 return null; sum = sum.add(value); return cumulative ? sum.toFixed(0) : value; });
-            series.push({ id: q.id, name: q.name || 'Без названия', source: q.source, currency, daily, values });
+            series.push({ id: q.id, name: q.name || 'Без названия', source: q.source, flow: q.source === 'budget' ? 'expense' : q.flow, currency, daily, values, budgets: (q.source === 'budget' || q.source === 'actual' && q.flow === 'expense') ? budgets.filter(b => accounts[b.accountId]?.currency === currency).map(b => ({id: b.id, name: b.name, total: (budgetAmounts.get(b.id) || new Decimal(0)).toFixed(0)})) : [] });
         }
     }
     for (const q of queries.filter(q => q.source === 'difference')) {
@@ -187,8 +239,8 @@ export function buildExplorerComparison(args: {
             if (!a || !b)
                 continue;
             const subtract = (x: (string | null)[], y: (string | null)[]) => x.map((v, i) => v === null || y[i] === null ? null : new Decimal(v).sub(y[i] || 0).toFixed(0));
-            series.push({ id: q.id, name: q.name || 'Разница', source: q.source, currency, daily: subtract(a.daily, b.daily), values: subtract(a.values, b.values) });
+            series.push({ id: q.id, name: q.name || 'Разница', source: q.source, flow: q.flow, budgets: [], currency, daily: subtract(a.daily, b.daily), values: subtract(a.values, b.values) });
         }
     }
-    return { dates, currencies: Array.from(new Set(series.map(s => s.currency))).sort(), series };
+    return { dates, currencies: Array.from(new Set(series.map(s => s.currency))).sort(), series, evidence };
 }

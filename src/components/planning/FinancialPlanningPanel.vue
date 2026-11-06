@@ -13,13 +13,14 @@
     </div>
     <fieldset :disabled="busy || !loaded">
     <legend>Месячные бюджеты</legend>
-    <p>Лимит действует каждый месяц. «Распределять остаток» означает сценарий расходования всего оставшегося лимита, а не обязательство.</p>
+    <p v-for="total in monthlyTotals" :key="total.currency"><strong>План на месяц: {{ formatPlanningMoney(total.limit, total.currency || '(валюта не выбрана)') }}</strong></p>
+    <p>Лимит действует каждый месяц. По умолчанию прогноз учитывает датированные доходы и платежи. Остаток бюджета можно отдельно учесть одним расходом в последний день месяца.</p>
     <article v-for="b in plan.budgets" :key="b.id" class="editor-row">
         <label>Название <input v-model="b.name" maxlength="64" @input="changed" /></label>
         <label>Счёт <select v-model="b.accountId" @change="changed"><option value="">Выберите счёт</option><option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }} · {{ a.currency }}</option></select></label>
         <label>Категории <select v-model="b.categoryIds" multiple @change="changed"><option v-for="c in expenseCategories" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
         <label>Лимит <input :value="displayMoney(b.limit)" inputmode="decimal" @change="setAmount(b, 'limit', $event)" /></label>
-        <label><input type="checkbox" v-model="b.estimate" @change="changed" />Распределять остаток по дням</label>
+        <label><input type="checkbox" v-model="b.estimate" @change="changed" />Учесть остаток бюджета в конце месяца</label>
         <button type="button" @click="removeBudget(b.id)">Удалить бюджет</button>
     </article>
     <button type="button" @click="addBudget">Добавить бюджет</button>
@@ -68,9 +69,11 @@
 </template>
 
 <script setup lang="ts">
-import { displayMoney } from '@/lib/planning.ts';
+import { monthlyBudgetTotals, formatPlanningMoney, displayMoney } from '@/lib/planning.ts';
+import { computed } from 'vue';
 import { useFinancialPlanning } from '@/lib/useFinancialPlanning.ts';
 const {plan,accounts,expenseCategories,result,busy,dirty,loaded,error,notice,through,includeOptional,changed,load,save,preview,addBudget,removeBudget,addItem,resetItem,setAmount,setSkips,accountName,chart,download,restore} = useFinancialPlanning();
+const monthlyTotals=computed(()=>monthlyBudgetTotals(plan.value.budgets,accounts.value,result.value?.budgets));
 </script>
 
 

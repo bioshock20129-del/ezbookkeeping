@@ -2021,8 +2021,11 @@ export const useExplorersStore = defineStore('explorers', () => {
             time:t.time, kind:t.type, accountId:t.sourceAccountId, destinationId:t.destinationAccountId,
             currency:t.sourceAccount.currency, destinationCurrency:t.destinationAccount?.currency || t.sourceAccount.currency,
             amount:String(t.sourceAmount), destinationAmount:String(t.destinationAmount),
-            categoryIds:[t.primaryCategory.id,t.secondaryCategory.id]
+            categoryIds:[t.primaryCategory.id,t.secondaryCategory.id],
+            categoryName:t.primaryCategoryName+' / '+t.secondaryCategoryName, accountName:t.sourceAccountName,
+            destinationAccountName:t.destinationAccountName, comment:t.comment, hideAmount:t.hideAmount
         })),
+        comparisonTransactionById: (id: string) => allTransactions.value.find(transaction => transaction.id === id),
         // computed
         isUsingAmountRange,
         filteredTransactionsInDataTable,

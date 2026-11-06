@@ -80,7 +80,7 @@ export class InsightsExplorer implements InsightsExplorerInfoResponse {
     public customChartDisplayLayout: number;
     public customChartScript: string;
     public comparisonCumulative: boolean = true;
-    public comparisonChart: 'line'|'bar' = 'line';
+    public comparisonChart: 'line'|'bar'|'radar'|'custom' = 'line';
     public comparisonCurrency: string = '';
 
     public static readonly Default: InsightsExplorer = new InsightsExplorer(
@@ -267,7 +267,7 @@ export class InsightsExplorer implements InsightsExplorerInfoResponse {
             customChartScript
         );
         explorer.comparisonCumulative = data?.['comparisonCumulative'] !== 0;
-        explorer.comparisonChart = data?.['comparisonChart'] === 'bar' ? 'bar' : 'line';
+        explorer.comparisonChart = (['bar', 'radar', 'custom'] as const).find(type => type === data?.['comparisonChart']) || 'line';
         explorer.comparisonCurrency = typeof data?.['comparisonCurrency'] === 'string' ? data['comparisonCurrency'] : '';
         return explorer;
     }

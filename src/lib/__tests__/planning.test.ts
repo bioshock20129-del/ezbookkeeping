@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import axios from 'axios';
-import { displayMoney, toMinor, flatAccounts, parseFinancialPlan, planningRequest, formatPlanningMoney } from '../planning.ts';
+import { displayMoney, toMinor, flatAccounts, parseFinancialPlan, planningRequest, formatPlanningMoney, monthlyBudgetTotals } from '../planning.ts';
 
 describe('financial planning money and import', () => {
     it('uses decimal arithmetic and preserves all minor units', () => {
@@ -43,5 +43,26 @@ describe('planning display amounts', () => {
         expect(formatPlanningMoney('2500000','RUB')).toBe('25\u00a0000 ₽');
         expect(formatPlanningMoney('-12345','USD')).toBe('−123,45 $');
         expect(formatPlanningMoney('999999999999999','RUB')).toBe('9\u00a0999\u00a0999\u00a0999\u00a0999,99 ₽');
+    });
+});
+
+
+describe('monthly budget totals', () => {
+    const account=(id:string,currency:string)=>({id,currency,name:id,balance:'0'});
+    const budget=(id:string,accountId:string,limit:string)=>({id,name:id,accountId,limit,categoryIds:['c'],estimate:false});
+    it('totals the four monthly limits, without combining currencies', () => {
+        const budgets=[budget('base','a','6000000'),budget('education','a','1500000'),budget('leisure','a','2000000'),budget('gifts','a','1000000'),budget('usd','b','12345')];
+        const totals=monthlyBudgetTotals(budgets,[account('a','RUB'),account('b','USD')]);
+        expect(totals.map(t=>[t.currency,t.limit,t.spent])).toEqual([['RUB','10500000',null],['USD','12345',null]]);
+        expect(formatPlanningMoney(totals[0]!.limit,'RUB')).toBe('105\u00a0000 ₽');
+    });
+    it('preserves cents past Number precision and negative remaining amounts', () => {
+        const budgets=[budget('a','a','999999999999999'),budget('b','a','999999999999999')];
+        const reports=budgets.map(b=>({...b,currency:'RUB',spent:'999999999999999',committed:'1',remaining:'-1',estimated:'0'}));
+        expect(monthlyBudgetTotals(budgets,[account('a','RUB')],reports)).toEqual([{currency:'RUB',limit:'1999999999999998',spent:'1999999999999998',committed:'2',remaining:'-2'}]);
+        expect(monthlyBudgetTotals(budgets,[account('a','RUB')],reports.slice(0,1))[0]!.spent).toBeNull();
+    });
+    it('keeps unresolved draft accounts out of known-currency totals', () => {
+        expect(monthlyBudgetTotals([budget('draft','','100')],[])).toEqual([{currency:'',limit:'100',spent:null,committed:null,remaining:null}]);
     });
 });
